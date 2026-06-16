@@ -5,13 +5,13 @@
 // config recorded in the file's `pipeline` block — so e.g. an enabled Mayer filter that gutted the
 // RSA at 6 brpm is obvious.
 //
-// Usage:  node reanalyze.mjs <export.json>
+// Usage:  node tools/reanalyze.mjs <export.json>
 
 import fs from 'fs';
-import { runPipeline, fitPeakToTrough } from './src/estimators-core.mjs';
+import { runPipeline, fitPeakToTrough } from '../src/estimators-core.mjs';
 
 const file = process.argv[2];
-if (!file) { console.error('usage: node reanalyze.mjs <export.json>'); process.exit(1); }
+if (!file) { console.error('usage: node tools/reanalyze.mjs <export.json>'); process.exit(1); }
 const data = JSON.parse(fs.readFileSync(file, 'utf8'));
 
 // Beats may be columnar { t:[], rr:[] } (current) or legacy [{t,rr}] — normalize to AoS.

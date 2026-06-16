@@ -1,6 +1,6 @@
 // Resonance / RSA estimators + the signal-filter pipeline. Pure: depends only on each
 // other and JS built-ins — no DOM, no app state. Shared by the app (src/app.js, bundled
-// into index.html) and the offline cross-estimator check (estimators.mjs). One true home.
+// into index.html) and the offline cross-estimator check (tools/estimators.mjs). One true home.
 
 //
 // Derived metrics

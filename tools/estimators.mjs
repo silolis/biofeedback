@@ -10,10 +10,10 @@
 //   3. specPeak   — Lomb-Scargle periodogram peak: is the dominant oscillation AT the paced rate?
 //   4. p2t        — peak-to-trough on a cubic-spline-resampled tachogram (Lehrer's classic estimator)
 //
-// Usage: node estimators.mjs <export.json> [more.json ...]
+// Usage: node tools/estimators.mjs <export.json> [more.json ...]
 
 import fs from 'fs';
-import { runPipeline, fitPeakToTrough, solveLinear } from './src/estimators-core.mjs';
+import { runPipeline, fitPeakToTrough, solveLinear } from '../src/estimators-core.mjs';
 
 const CLEAN = [
   { filterId: 'dedup', enabled: true, show: false, opts: {} },

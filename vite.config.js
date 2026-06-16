@@ -9,8 +9,8 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 //   npm run dev     local dev server with hot reload (needed: ES modules don't load from file://)
 //   npm run build   emit the single-file dist/index.html
 //
-// The offline tools (estimators.mjs, reanalyze.mjs) import src/estimators-core.mjs directly
-// via Node and are not part of this build.
+// The offline tools (tools/estimators.mjs, tools/reanalyze.mjs) import src/estimators-core.mjs
+// directly via Node and are not part of this build.
 export default defineConfig({
   plugins: [viteSingleFile()],
   build: {
