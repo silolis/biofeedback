@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
-// Bundles index.html + src/app.js + src/estimators-core.mjs (+ the inline CSS) into ONE
-// self-contained dist/index.html — keeps the "just open the file" property of the original
-// single-page app while letting the source live in real, importable modules.
+// Bundles index.html + src/styles.css + the src/*.js modules (app entry → state, signal,
+// feedback, search + estimators-core) into ONE self-contained dist/index.html — keeps the
+// "just open the file" property of the original single-page app while letting the source
+// live in real, importable modules.
 //
 //   npm run dev     local dev server with hot reload (needed: ES modules don't load from file://)
 //   npm run build   emit the single-file dist/index.html
