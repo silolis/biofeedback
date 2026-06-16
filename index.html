@@ -1,0 +1,1406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HRV Biofeedback</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1115;
+    --panel: #181b22;
+    --fg: #e6e9ef;
+    --prose-fg: #c4cad6;
+    --prose-strong: #e6e9ef;
+    --muted: #8a93a3;
+    --accent: #6ee7b7;
+    --warn: #fbbf24;
+    --inhale: #60a5fa;
+    --exhale: #f472b6;
+    --prose-size: 22px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  h1 {
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 16px;
+  }
+  .row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  button {
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid #2a2f3a;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { background: #20242d; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { border-color: var(--accent); color: var(--accent); }
+  #statusbar { margin: -8px 0 16px; min-height: 1.2em; }
+  #status { color: var(--muted); font-size: 14px; }
+  #status.ok { color: var(--accent); }
+  #status.warn { color: var(--warn); }
+
+  /* Thin divider that separates the action cluster from the view-mode cluster in the toolbar */
+  .tool-sep {
+    width: 1px;
+    align-self: center;
+    height: 40px;
+    background: #2a2f3a;
+    margin: 0 2px;
+  }
+  /* Icon button + a persistent caption beneath it (tooltips are invisible on touch) */
+  .tool {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+  .tool-cap {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    line-height: 1;
+    white-space: nowrap;
+    user-select: none;
+  }
+  /* Caption tracks its button's active/state colour */
+  .tool:has(.icon-btn.active) .tool-cap,
+  .tool:has(#connect.connected) .tool-cap { color: var(--accent); }
+  .tool:has(#search-start.searching) .tool-cap,
+  .tool:has(#record.recording) .tool-cap { color: var(--warn); }
+  /* Search button in its running state — reads as a Stop, mirroring the Record button */
+  #search-start.searching {
+    background: #3a2f1a;
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+
+  button.active {
+    background: #2a3640;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  #demo-bar { font-size: 13px; color: var(--muted); }
+  .demo-chip {
+    background: var(--warn);
+    color: #1a1410;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 3px 7px;
+    border-radius: 3px;
+  }
+  .dev-tools {
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px dashed #2a2f3a;
+    display: flex;
+    align-items: center;
+    justify-content: center;          /* bottom-of-page, centered */
+    gap: 18px;
+    font-size: 12px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .dev-tools button {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .size-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .size-control .size-btn {
+    font-size: 12px;
+    padding: 2px 8px;
+    min-width: 32px;
+  }
+  #prose-size-display {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    min-width: 38px;
+    text-align: center;
+  }
+
+  .pacer-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 360px;
+    position: relative;
+  }
+  #pacer-circle {
+    transform-origin: center;
+    transition: fill 200ms;
+  }
+  .pacer-extremum {
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 7;
+    opacity: 0.18;
+    pointer-events: none;
+  }
+  #pacer-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 28px;
+    font-weight: 300;
+    pointer-events: none;
+    color: var(--fg);
+    text-shadow: 0 0 12px rgba(0,0,0,0.6);
+  }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 16px 0 24px;
+  }
+  .metric {
+    background: var(--panel);
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid #2a2f3a;
+  }
+  .metric .label {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .metric .value {
+    font-size: 28px;
+    font-weight: 300;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric .unit { font-size: 14px; color: var(--muted); margin-left: 4px; }
+  .metric-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .controls {
+    background: var(--panel);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #2a2f3a;
+    margin: 12px 0 0;
+  }
+  /* Search action panel holds only the button row — drop the divider meant to separate it from controls above. */
+  .search-only .search-row {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+  .controls label {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+  .controls .ctrl-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .controls input[type=range] { width: 100%; }
+  .controls select, .controls input[type=number] {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid #2a2f3a;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font: inherit;
+  }
+  .val-display {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    min-width: 64px;
+    text-align: right;
+  }
+  /* Brief pulse to confirm a programmatic change (e.g. applying the searched practice rate) */
+  @keyframes flash-highlight {
+    0%, 25% { box-shadow: 0 0 0 2px var(--accent); }
+    100%    { box-shadow: 0 0 0 2px rgba(110, 231, 183, 0); }
+  }
+  .flash-highlight { animation: flash-highlight 1.4s ease-out; border-radius: 6px; }
+
+  /* Sweep settings drawer form */
+  .settings-content {
+    padding: 4px 16px 20px;
+  }
+  .settings-content .ctrl-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .settings-content label {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+  .settings-content input[type=text],
+  .settings-content input[type=number] {
+    width: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid #2a2f3a;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font: inherit;
+  }
+  .settings-content input:disabled { opacity: 0.5; }
+  .settings-content .settings-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 4px 0 0;
+    line-height: 1.5;
+  }
+  .settings-content .settings-note.warn { color: var(--warn); }
+  .settings-content .settings-note:empty { display: none; }
+  .settings-content .settings-section-title {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 24px 0 12px;
+    padding-top: 16px;
+    border-top: 1px solid #2a2f3a;
+  }
+  .settings-content .settings-section-title:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+  /* Section heading already separates Audio block; drop the row's own divider. */
+  .settings-content .audio-row {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  /* Signal-pipeline controls (auto-rendered from each filter's schema) */
+  .pipeline-stage {
+    border: 1px solid #2a2f3a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .pipeline-stage.off { opacity: 0.5; }
+  .pipeline-stage-head { display: flex; align-items: center; gap: 8px; }
+  /* .settings-content prefix so these out-specify `.settings-content label { display:block }`,
+     which would otherwise break the flex layout and drop the checkbox/swatch/text to baseline. */
+  .settings-content .pipeline-enable {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--fg);
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+    margin: 0;
+  }
+  .settings-content .pipeline-show {
+    margin: 0 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .pipeline-stage-head input[type=checkbox] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    margin: 0;
+  }
+  .pipeline-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+  .pipeline-field {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .pipeline-field label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: none;
+    letter-spacing: 0;
+    margin: 0;
+  }
+  .pipeline-field input[type=range] { width: 100%; }
+  .pipeline-field input[type=number] {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid #2a2f3a;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font: inherit;
+    width: 70px;
+  }
+  .pipeline-min {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Role badge on each pipeline stage — makes "what feeds the score" obvious */
+  .pipeline-role {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #2a2f3a;
+    white-space: nowrap;
+  }
+  .pipeline-role.measurement { color: var(--accent); border-color: rgba(110, 231, 183, 0.4); }
+  .pipeline-role.analysis { color: var(--muted); }
+  #score-basis strong { color: var(--accent); }
+  .settings-content .analyzer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--fg);
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+    margin: 8px 0 0;
+  }
+  .analyzer-row input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+
+  canvas {
+    width: 100%;
+    height: 200px;
+    background: var(--panel);
+    border-radius: 8px;
+    border: 1px solid #2a2f3a;
+    display: block;
+  }
+
+  /* Audio row */
+  .audio-row {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2f3a;
+  }
+  .audio-label {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    color: var(--fg) !important;
+    font-size: 12px !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    margin: 0 !important;
+    cursor: pointer;
+  }
+  .audio-label input[type=checkbox] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+  .volume-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 180px;
+  }
+  .volume-wrap input[type=range] { width: 120px; }
+
+  .pitch-row { margin-top: 8px; }
+  .pitch-inputs { display: flex; align-items: center; gap: 14px; }
+  .pitch-label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 !important;
+  }
+  .pitch-fields { display: flex; align-items: center; gap: 8px; }
+  .pitch-fields input[type=number] {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid #2a2f3a;
+    border-radius: 4px;
+    padding: 4px 8px;
+    width: 70px;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+  .pitch-sep { color: var(--muted); }
+
+  .mix-row { grid-template-columns: 1fr 1fr; gap: 18px; align-items: center; }
+  .mix-control { display: flex; align-items: center; gap: 10px; }
+  .mix-control input[type=range] { flex: 1; }
+  .mix-label {
+    margin: 0 !important;
+    min-width: 50px;
+    color: var(--muted) !important;
+    font-size: 12px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  /* Resonance search */
+  .search-row {
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2f3a;
+  }
+  .search-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 150ms;
+  }
+  .search-btn:hover:not(:disabled) { background: rgba(110, 231, 183, 0.08); }
+  .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .search-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  #search-panel {
+    margin-top: 16px;
+    background: var(--panel);
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 18px 22px;
+  }
+  .search-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .search-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .search-inhale-info {
+    margin-left: 8px;
+    color: var(--accent);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+  }
+  .search-status-line {
+    font-size: 13px;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  #search-current-rate { color: var(--accent); font-weight: 500; }
+  #search-phase {
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  #search-cancel {
+    background: transparent;
+    color: var(--warn);
+    border: 1px solid #2a2f3a;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #search-cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+  #search-cancel.is-close { color: var(--muted); }
+  #search-cancel.is-close:hover { color: var(--fg); }
+
+  .search-bars {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 10px;
+    align-items: end;
+    min-height: 160px;
+  }
+  .search-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .search-bar-track {
+    height: 120px;
+    width: 100%;
+    background: var(--bg);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .search-bar-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, var(--muted), #5b6473);
+    transition: height 300ms ease-out;
+  }
+  .search-bar.current .search-bar-fill {
+    background: linear-gradient(to top, var(--inhale), #93c5fd);
+    animation: search-pulse 1.4s ease-in-out infinite;
+  }
+  .search-bar.done .search-bar-fill {
+    background: linear-gradient(to top, var(--muted), #8a93a3);
+  }
+  .search-bar.winner .search-bar-fill {
+    background: linear-gradient(to top, var(--accent), #34d399);
+  }
+  @keyframes search-pulse {
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 1.0; }
+  }
+  .search-bar-value {
+    font-size: 12px;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .search-bar-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .search-bar-reps { font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .search-bar-qual { font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .search-bar.winner .search-bar-value { color: var(--accent); font-weight: 600; }
+  /* Low fit-quality (R² < gate): a real bar height but visibly de-emphasised, so a noisy window
+     reads as "don't trust this one" rather than a confident measurement. */
+  .search-bar.lowqual { opacity: 0.42; }
+  .search-bar.lowqual .search-bar-fill {
+    background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.25) 3px, rgba(0,0,0,0.25) 6px);
+  }
+  /* A completed bar is a button into its fit detail — subtle ring on hover, accent ring when shown. */
+  .search-bar.clickable { cursor: pointer; }
+  .search-bar.clickable .search-bar-track { transition: box-shadow 120ms; }
+  .search-bar.clickable:hover .search-bar-track { box-shadow: 0 0 0 1px var(--muted); }
+  .search-bar.clickable:focus-visible { outline: none; }
+  .search-bar.clickable:focus-visible .search-bar-track { box-shadow: 0 0 0 2px var(--muted); }
+  .search-bar.selected .search-bar-track { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* Post-search fit inspector — the global sinusoid+trend fit drawn over one rate's cleaned beats.
+     Reuses the overlay colours from the amp-fit filter so the trace reads the same everywhere. */
+  .search-detail { margin-top: 18px; padding-top: 16px; border-top: 1px solid #2a2f3a; }
+  .fit-detail-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+  .fit-detail-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .fit-detail-title strong { color: var(--fg); font-weight: 600; }
+  .fit-readout { font-size: 13px; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .fit-readout .k { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; margin-right: 4px; }
+  .fit-r2.qual-clear { color: var(--accent); }
+  .fit-r2.qual-mod { color: var(--fg); }
+  .fit-r2.qual-low { color: var(--warn); }
+  .fit-svg { width: 100%; height: auto; display: block; background: var(--bg); border: 1px solid #2a2f3a; border-radius: 6px; margin-top: 4px; }
+  .fit-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .fit-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .fit-legend i { width: 16px; border-top: 2px solid; display: inline-block; }
+  /* One orchestrated reveal: beats dot in, the trend fades, the fitted wave draws on, the caliper
+     snaps in last — narrating the decomposition (drift removed, then the breath-locked swing). */
+  .fit-axis { fill: var(--muted); font: 11px -apple-system, system-ui, sans-serif; }
+  .fit-svg .fit-beat { fill: var(--accent); opacity: 0; animation: fitDot 0.4s ease-out forwards; }
+  .fit-svg .fit-path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .fit-svg .fit-trend { stroke: #a78bfa; stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0; animation: fitTrend 0.45s ease-out 0.35s forwards; }
+  .fit-svg .fit-model { stroke: #fb7185; stroke-width: 2; stroke-dasharray: 1; stroke-dashoffset: 1; animation: fitModel 0.6s ease-out 0.75s forwards; }
+  .fit-svg .fit-caliper { opacity: 0; animation: fitFade 0.3s ease 1.25s forwards; }
+  .fit-svg .fit-caliper line { stroke: var(--accent); stroke-width: 1.5; }
+  .fit-svg .fit-cal-label { fill: var(--accent); font: 600 11px -apple-system, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  @keyframes fitDot { to { opacity: 0.55; } }
+  @keyframes fitTrend { to { opacity: 0.7; } }
+  @keyframes fitModel { to { stroke-dashoffset: 0; } }
+  @keyframes fitFade { to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .fit-svg .fit-beat, .fit-svg .fit-trend, .fit-svg .fit-model, .fit-svg .fit-caliper { animation: none; opacity: 1; }
+    .fit-svg .fit-model { stroke-dashoffset: 0; }
+    .fit-svg .fit-trend { opacity: 0.7; }
+    .fit-svg .fit-beat { opacity: 0.55; }
+  }
+
+  /* Methodology drawer — live description of the current pipeline + sweep config */
+  .method-stages { list-style: none; padding: 0; margin: 0 0 4px; }
+  .method-stages li { margin: 0 0 12px; padding-left: 18px; position: relative; }
+  .method-dot { position: absolute; left: 0; top: 7px; width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .method-tag { font-size: 11px; color: var(--muted); border: 1px solid #2a2f3a; border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+  .method-desc { color: var(--prose-fg); font-size: 0.92em; margin-top: 3px; line-height: 1.5; }
+  .method-opts { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .method-off { color: var(--muted); font-size: 0.9em; }
+
+  /* One continuous sweep-progress bar under the rate columns. The fill advances
+     across the whole sweep; divider ticks mark each rate, so the fill's position
+     shows which rate is currently measuring (local progress within its segment). */
+  .search-progress {
+    position: relative;
+    height: 6px;
+    margin-top: 12px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .search-progress-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 200ms linear;
+  }
+  .search-progress-segs { position: absolute; inset: 0; pointer-events: none; }
+  .search-progress-segs .seg-div {
+    position: absolute; top: 0; bottom: 0;
+    width: 1px;
+    background: var(--panel);
+  }
+
+  #search-results {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #2a2f3a;
+  }
+  .search-result-title {
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--muted);
+  }
+  .search-result-rate {
+    font-size: 22px;
+    color: var(--accent);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .search-result-conf { font-size: 12px; color: var(--muted); margin-left: 6px; }
+  .search-result-text {
+    font-size: 13px;
+    color: var(--fg);
+    line-height: 1.55;
+    margin-bottom: 14px;
+  }
+  .search-result-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .search-result-actions button {
+    font-size: 13px;
+    padding: 6px 12px;
+  }
+
+  /* Refine-suggestion popup */
+  #refine-dialog {
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid #2a2f3a;
+    border-radius: 10px;
+    padding: 0;
+    max-width: 440px;
+    width: calc(100% - 32px);
+  }
+  #refine-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+  .refine-dialog-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .refine-dialog-body h3 { margin: 0; font-size: 17px; }
+  .refine-note { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .refine-note.warn { color: var(--warn); }
+  .refine-dialog-body label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .refine-dialog-body input {
+    font: inherit;
+    padding: 8px 10px;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid #2a2f3a;
+    border-radius: 6px;
+  }
+  .refine-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  /* Session summary */
+  #summary {
+    margin-top: 16px;
+    background: var(--panel);
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 18px 22px;
+  }
+  .summary-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+  }
+  .summary-grid > div { display: flex; flex-direction: column; gap: 4px; }
+  .summary-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .summary-value {
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-value small {
+    font-size: 13px;
+    color: var(--muted);
+    margin-left: 3px;
+  }
+  .summary-foot {
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Square icon buttons (connect, record) */
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #connect.connected {
+    background: #2a3640;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .rec-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--warn);
+    display: block;
+    /* Gap + ring → reads as a physical record button rather than an anonymous dot */
+    box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--muted);
+    transition: border-radius 120ms, box-shadow 120ms;
+  }
+  #record:disabled .rec-dot { background: var(--muted); box-shadow: none; }
+  #record:hover:not(:disabled) .rec-dot { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--warn); }
+  #record.recording { border-color: var(--warn); }
+  #record.recording .rec-dot {
+    border-radius: 2px;                 /* dot → square: now a Stop button */
+    box-shadow: none;
+    animation: rec-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* View mode — square icon buttons (radio group) */
+  .view-mode {
+    display: inline-flex;
+    gap: 8px;
+  }
+  .icon-btn.active { background: #2a3640; border-color: var(--accent); color: var(--accent); }
+
+  /* Breather modes — hide all but the breathing circle (feedback also keeps metrics + graph) */
+  body.mode-feedback h1,
+  body.mode-feedback .controls,
+  body.mode-feedback #summary,
+  body.mode-feedback #statusbar,
+  body.mode-feedback .dev-tools,
+  body.mode-feedback .drawer,
+  body.mode-cue h1,
+  body.mode-cue .controls,
+  body.mode-cue canvas,
+  body.mode-cue #summary,
+  body.mode-cue #statusbar,
+  body.mode-cue .dev-tools,
+  body.mode-cue .drawer,
+  body.mode-cue .metrics {
+    display: none !important;
+  }
+
+  body.mode-feedback, body.mode-cue { background: #000; }
+
+  /* Top row stays accessible but auto-hides until hover */
+  body.mode-feedback .row:first-of-type,
+  body.mode-cue .row:first-of-type {
+    position: fixed;
+    top: 8px;
+    right: 12px;
+    background: transparent;
+    margin: 0;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  body.mode-feedback .row:first-of-type:hover,
+  body.mode-cue .row:first-of-type:hover { opacity: 0.85; }
+
+  /* Pacer takes the page */
+  body.mode-feedback .pacer-wrap { height: 78vh; margin: 0; }
+  body.mode-cue .pacer-wrap { height: 100vh; margin: 0; }
+
+  body.mode-feedback #pacer-label,
+  body.mode-cue #pacer-label {
+    font-size: 14px;
+    color: var(--muted);
+    text-shadow: none;
+    letter-spacing: 0.3em;
+    text-transform: lowercase;
+  }
+  body.mode-feedback #pacer-circle,
+  body.mode-cue #pacer-circle {
+    opacity: 0.42 !important;
+  }
+  body.mode-feedback .pacer-extremum,
+  body.mode-cue .pacer-extremum {
+    opacity: 0.12;
+  }
+
+  /* Feedback mode: minimal metrics row at bottom */
+  body.mode-feedback .metrics {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 32px;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    grid-template-columns: none;
+  }
+  body.mode-feedback .metric {
+    background: transparent;
+    border: none;
+    padding: 0;
+    text-align: center;
+    opacity: 0.7;
+  }
+  body.mode-feedback .metric .value { font-size: 22px; }
+  body.mode-feedback .metric .label { font-size: 10px; }
+
+  /* Drawers */
+  .drawer {
+    margin-top: 12px;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .drawer summary {
+    cursor: pointer;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--fg);
+    font-weight: 500;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .drawer summary::-webkit-details-marker { display: none; }
+  .drawer summary::before {
+    content: '▸';
+    color: var(--muted);
+    transition: transform 150ms;
+    display: inline-block;
+    width: 10px;
+    font-size: 10px;
+  }
+  .drawer[open] summary::before { transform: rotate(90deg); }
+  .drawer summary:hover { background: rgba(255,255,255,0.02); }
+  .drawer-content {
+    padding: 12px 32px 32px 32px;
+    color: var(--prose-fg);
+    font-family: Charter, "Iowan Old Style", "Palatino Linotype", Palatino, "URW Palladio L", Georgia, serif;
+    font-size: var(--prose-size);
+    line-height: 1.65;
+    letter-spacing: 0.005em;
+    max-width: 40em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .drawer-content strong { color: var(--prose-strong); font-weight: 600; }
+  .drawer-content em { color: var(--prose-strong); }
+  .drawer-content em.term { color: var(--accent); font-style: italic; font-weight: 500; }
+  .drawer-content h3 {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 32px 0 12px;
+    font-weight: 600;
+    -webkit-font-smoothing: antialiased;
+  }
+  .drawer-content h3:first-child { margin-top: 8px; }
+  .drawer-content p { margin: 0 0 16px; }
+  .drawer-content ol, .drawer-content ul {
+    margin: 0 0 16px; padding-left: 26px;
+  }
+  .drawer-content li { margin-bottom: 10px; }
+  .drawer-content code, .drawer-content kbd {
+    background: var(--bg);
+    padding: 2px 0.4em;
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 0.78em;
+    border: 1px solid #2a2f3a;
+  }
+  .refs {
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid #2a2f3a;
+    font-size: 0.78em;
+    color: var(--muted);
+  }
+  .refs .refs-title {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    margin-bottom: 12px;
+    color: var(--muted);
+    -webkit-font-smoothing: antialiased;
+  }
+  .refs ol { padding-left: 26px; margin: 0; }
+  .refs li { margin-bottom: 10px; line-height: 1.55; }
+
+  #dev-drawer { display: none; }
+  body.demo-active #dev-drawer { display: block; }
+
+  #demo-bar {
+    background: var(--bg);
+    border: 1px solid #2a2f3a;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    -webkit-font-smoothing: antialiased;
+  }
+</style>
+</head>
+<body>
+
+<h1>HRV Biofeedback</h1>
+
+<div class="row">
+  <span class="tool">
+    <button id="connect" class="icon-btn primary" title="Connect chest strap" aria-label="Connect chest strap">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M7 7l10 10-5 5V2l5 5L7 17"/>
+      </svg>
+    </button>
+    <span class="tool-cap" id="connect-cap">Connect</span>
+  </span>
+  <span class="tool">
+    <button id="record" class="icon-btn" title="Record at the current setting" aria-label="Record at the current setting" disabled>
+      <span class="rec-dot"></span>
+    </button>
+    <span class="tool-cap" id="record-cap">Record</span>
+  </span>
+  <span class="tool">
+    <button id="clear" class="icon-btn" title="Clear logged data — reset the graph and metrics" aria-label="Clear logged data">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      </svg>
+    </button>
+    <span class="tool-cap">Clear</span>
+  </span>
+  <span class="tool">
+    <button id="search-start" class="icon-btn" title="Find resonance frequency" aria-label="Find resonance frequency">
+      <svg id="search-start-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 3v8a3 3 0 0 0 6 0V3"/><line x1="12" y1="14" x2="12" y2="21"/>
+      </svg>
+      <svg id="search-stop-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" style="display:none">
+        <rect x="6" y="6" width="12" height="12" rx="1.5"/>
+      </svg>
+    </button>
+    <span class="tool-cap" id="search-cap">Find rate</span>
+  </span>
+  <span class="tool-sep" aria-hidden="true"></span>
+  <div class="view-mode" id="view-mode" role="radiogroup" aria-label="View mode">
+    <span class="tool">
+      <button type="button" class="icon-btn active" data-mode="full" role="radio" aria-checked="true" title="Full view" aria-label="Full view">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+        </svg>
+      </button>
+      <span class="tool-cap">Full</span>
+    </span>
+    <span class="tool">
+      <button type="button" class="icon-btn" data-mode="feedback" role="radio" aria-checked="false" title="Breather + feedback (circle, metrics, graph)" aria-label="Feedback view">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12h4l3 8 4-16 3 8h4"/>
+        </svg>
+      </button>
+      <span class="tool-cap">Feedback</span>
+    </span>
+    <span class="tool">
+      <button type="button" class="icon-btn" data-mode="cue" role="radio" aria-checked="false" title="Cue only (breathing circle)" aria-label="Cue view">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="8"/>
+        </svg>
+      </button>
+      <span class="tool-cap">Cue</span>
+    </span>
+  </div>
+  <span class="tool">
+    <button id="fullscreen" class="icon-btn" title="Fullscreen — keeps the screen on during long sweeps" aria-label="Toggle fullscreen">
+      <svg id="fullscreen-enter-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>
+      </svg>
+      <svg id="fullscreen-exit-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none">
+        <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/>
+      </svg>
+    </button>
+    <span class="tool-cap" id="fullscreen-cap">Fullscreen</span>
+  </span>
+</div>
+<div id="statusbar"><span id="status">Not connected</span></div>
+
+<div class="pacer-wrap">
+  <svg width="320" height="320" viewBox="0 0 320 320">
+    <!-- Faint extremum rings — pacing reference for max-inhale and min-exhale -->
+    <circle class="pacer-extremum" cx="160" cy="160" r="140"/>
+    <circle class="pacer-extremum" cx="160" cy="160" r="40"/>
+    <circle id="pacer-circle" cx="160" cy="160" r="60" style="fill: var(--inhale); opacity: 0.5;"/>
+  </svg>
+  <div id="pacer-label">—</div>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="label">Heart rate</div>
+    <div class="value"><span id="hr">--</span><span class="unit">bpm</span></div>
+  </div>
+  <div class="metric">
+    <div class="label">Cycle amplitude</div>
+    <div class="value"><span id="amp">--</span><span class="unit">ms</span></div>
+    <div class="metric-sub"><span id="amp-bpm">--</span> bpm</div>
+  </div>
+  <div class="metric">
+    <div class="label">RMSSD (60s)</div>
+    <div class="value"><span id="rmssd">--</span><span class="unit">ms</span></div>
+  </div>
+  <div class="metric">
+    <div class="label">Session</div>
+    <div class="value"><span id="elapsed">0:00</span></div>
+  </div>
+</div>
+
+<div id="search-panel" style="display:none">
+  <div class="search-header">
+    <span class="search-title">Resonance search<span id="search-inhale-info" class="search-inhale-info"></span></span>
+    <span class="search-status-line">
+      <span id="search-current-rate">—</span>
+      · <span id="search-phase">—</span>
+      · step ends in <span id="search-step-remaining">—</span>
+      · total <span id="search-total-remaining">—</span>
+    </span>
+    <button id="search-cancel" disabled>Cancel</button>
+  </div>
+  <div id="search-bars" class="search-bars"></div>
+  <div id="search-progress" class="search-progress" title="Sweep progress — the fill sits under the rate currently measuring">
+    <div id="search-progress-fill" class="search-progress-fill"></div>
+    <div id="search-progress-segs" class="search-progress-segs"></div>
+  </div>
+  <div id="search-detail" class="search-detail" style="display:none"></div>
+  <div id="search-results" style="display:none"></div>
+</div>
+
+<dialog id="refine-dialog">
+  <div class="refine-dialog-body">
+    <h3>Refine around the peak?</h3>
+    <p id="refine-dialog-msg" class="refine-note"></p>
+    <label>Rates to sweep next (brpm, high → low)
+      <input type="text" id="refine-dialog-rates" autocomplete="off">
+    </label>
+    <div class="refine-dialog-actions">
+      <button type="button" id="refine-dialog-stop">Stop here</button>
+      <button type="button" id="refine-dialog-start" class="primary">Start refine</button>
+    </div>
+  </div>
+</dialog>
+
+<canvas id="chart"></canvas>
+
+<details class="drawer" id="breathing-drawer" open>
+  <summary>Breathing settings</summary>
+  <div class="settings-content">
+    <div class="ctrl-row" id="brpm-row">
+      <div>
+        <label>Breathing rate</label>
+        <input type="range" id="brpm" min="3.0" max="7" step="0.1" value="5.0">
+      </div>
+      <div class="val-display"><span id="brpm-display">5.0</span> brpm</div>
+    </div>
+    <div class="ctrl-row">
+      <div>
+        <label>Inhale fraction (rest is exhale)</label>
+        <input type="range" id="inhale-frac" min="0.35" max="0.5" step="0.01" value="0.4">
+      </div>
+      <div class="val-display"><span id="inhale-display">40</span>% in</div>
+    </div>
+  </div>
+</details>
+
+<details class="drawer" id="settings-drawer">
+  <summary>Settings</summary>
+  <div class="settings-content">
+    <h3 class="settings-section-title">Signal pipeline</h3>
+    <p class="settings-note" id="score-basis"></p>
+    <div id="pipeline-controls"></div>
+    <p class="settings-note"><strong>Measurement</strong> filters clean the beats and feed the metrics &amp; score. <strong>Analysis</strong> filters are visual overlays only — they never change the number. Toggle a filter's <em>show</em> to draw it; dropped beats are marked on the graph.</p>
+
+    <h3 class="settings-section-title">Sweep</h3>
+    <div class="ctrl-row">
+      <div>
+        <label>Sweep rates — brpm, high → low</label>
+        <input type="text" id="set-rates" value="6.5, 6, 5.5, 5, 4.5">
+      </div>
+      <div class="val-display"><small id="set-rates-count">5 rates</small></div>
+    </div>
+    <div class="ctrl-row">
+      <div>
+        <label>Settle seconds (discarded per rate)</label>
+        <input type="number" id="set-settle" min="0" max="120" step="5" value="30">
+      </div>
+      <div class="val-display">sec</div>
+    </div>
+    <div class="ctrl-row">
+      <div>
+        <label>Measure seconds (scored per rate)</label>
+        <input type="number" id="set-measure" min="10" max="180" step="5" value="90">
+      </div>
+      <div class="val-display">sec</div>
+    </div>
+    <div class="ctrl-row">
+      <div>
+        <label>Passes (interleaved replicates, averaged)</label>
+        <input type="number" id="set-passes" min="1" max="5" step="1" value="1">
+      </div>
+      <div class="val-display">×</div>
+    </div>
+    <div class="ctrl-row">
+      <div>
+        <label>Auto-refine rounds (narrower sweep around each peak)</label>
+        <input type="number" id="set-refine-rounds" min="0" max="3" step="1" value="0">
+      </div>
+      <div class="val-display">rounds</div>
+    </div>
+    <p class="settings-note" id="measure-hint"></p>
+    <p class="settings-note">Total run <span id="set-total">—</span>. Slower rates fit fewer breaths per step, so a longer measure window gives steadier medians. Rates must be within the breathing-rate slider range (3.0–7.0 brpm).</p>
+
+    <label style="margin-top:14px">Analyzers (composable — all enabled run; results shown together)</label>
+    <div id="analyzer-controls"></div>
+
+    <h3 class="settings-section-title">Audio</h3>
+    <div class="ctrl-row audio-row">
+      <label class="audio-label">
+        <input type="checkbox" id="audio-toggle">
+        <span>Audio cues — pitch glides with breath, soft chime each cycle</span>
+      </label>
+      <div class="volume-wrap">
+        <input type="range" id="volume" min="0" max="0.5" step="0.01" value="0.18">
+        <span class="val-display"><span id="volume-display">18%</span></span>
+      </div>
+    </div>
+    <div class="ctrl-row pitch-row">
+      <div class="pitch-inputs">
+        <label class="pitch-label">Pitch range (Hz)</label>
+        <div class="pitch-fields">
+          <input type="number" id="freq-low"  min="80"  max="500" step="1" value="196">
+          <span class="pitch-sep">→</span>
+          <input type="number" id="freq-high" min="100" max="700" step="1" value="220">
+        </div>
+      </div>
+      <div class="val-display"><small id="interval-display">G3 → A3 (M2)</small></div>
+    </div>
+    <div class="ctrl-row mix-row">
+      <div class="mix-control">
+        <label class="mix-label">Drone</label>
+        <input type="range" id="drone-level" min="0" max="1" step="0.01" value="0.5">
+        <span class="val-display"><span id="drone-level-display">50</span>%</span>
+      </div>
+      <div class="mix-control">
+        <label class="mix-label">Gong</label>
+        <input type="range" id="chime-level" min="0" max="1" step="0.01" value="1">
+        <span class="val-display"><span id="chime-level-display">100</span>%</span>
+      </div>
+    </div>
+  </div>
+</details>
+
+<div id="summary" style="display:none"></div>
+
+<details class="drawer" id="dev-drawer">
+  <summary>Demo &amp; dev tools</summary>
+  <div class="drawer-content">
+
+    <p id="demo-bar">
+      <span class="demo-chip">DEMO</span>
+      baseline <span id="demo-baseline-val" class="val-display">60</span> bpm
+      · RSA amp ±<span id="demo-rsa-val" class="val-display">4.0</span> bpm
+      · simulated resonance @ <span id="demo-resonance-val" class="val-display">5.5</span> brpm
+    </p>
+
+    <h3>Keyboard (active in demo mode)</h3>
+    <ul>
+      <li><kbd>←</kbd> <kbd>→</kbd> — breathing rate (brpm slider)</li>
+      <li><kbd>↑</kbd> <kbd>↓</kbd> — inhale fraction</li>
+      <li><kbd>+</kbd> <kbd>−</kbd> — simulated HR baseline (1 bpm steps)</li>
+      <li><kbd>,</kbd> <kbd>.</kbd> — RSA amplitude (0.5 bpm steps)</li>
+      <li><kbd>9</kbd> <kbd>0</kbd> — simulated resonance frequency (0.1 brpm steps) — the rate the search should find</li>
+    </ul>
+    <p>All keys are unshifted on US and Nordic keyboard layouts. The simulated HR stream pushes into the same logs the real strap would feed, so every metric and the chart update live as you tweak.</p>
+
+    <h3>Auto-reload</h3>
+    <p>Add <code>?dev</code> to the URL — e.g. <code>http://localhost:8000/?dev</code> — and the page polls itself with <code>HEAD</code> requests once per second, reloading on <code>Last-Modified</code> or <code>ETag</code> change. Off by default so it does not drop the BLE connection mid-session.</p>
+
+  </div>
+</details>
+
+<details class="drawer" id="about-drawer" open>
+  <summary>About — what this is and how to use it</summary>
+  <div class="drawer-content">
+
+    <h3>Background</h3>
+    <p>Heart rate is not constant — it speeds up slightly when you inhale and slows when you exhale, a pattern called <em class="term">respiratory sinus arrhythmia</em> (RSA); RSA is the breathing-driven part of <em class="term">heart-rate variability</em> (HRV), the overall variation in the time between consecutive heartbeats. The size of that oscillation reflects how strongly the vagus nerve — the main parasympathetic (rest-and-recover) output to the heart — is modulating beat-to-beat timing. Bigger swing means a stronger vagal brake. RSA amplitude is one of the cleanest non-invasive proxies for parasympathetic tone you can measure from outside the body.</p>
+    <p>Strengthening that brake is what the practice trains. The autonomic nervous system has two opposing branches — the <em class="term">sympathetic</em>, which drives arousal (the active, fight-or-flight side that stress and hard training switch on), and the parasympathetic, which settles the body, carried mostly by the vagus. Slow breathing engages the vagus, damping the active branch and easing the body toward rest. At a personal rate — usually 5 to 7 brpm — the breath also falls into step with the <em class="term">baroreflex</em> (which adjusts heart rate to blood-pressure swings) and RSA reaches resonance: the heart-rate oscillation grows large and smooth, breath, heart, and blood pressure rising and falling together — the effect Lehrer, Vaschillo, and colleagues mapped in the early 2000s [1, 4]. The bigger that swing, the more vagal brake you are applying, so <em class="term">Cycle amplitude</em> is the signal this tool exists to grow.</p>
+
+    <h3>How it's measured</h3>
+    <p>The chest strap is a single-lead <em class="term">ECG</em> — two electrodes reading the heart's electrical signal off the skin. It isn't sensing blood flow or pulse; it watches for the <strong>R-peak</strong>, the sharp spike each time the ventricles fire, and timestamps it. What it reports per beat is the <em class="term">RR interval</em>: the time from the previous R-peak to this one, in milliseconds. Crucially, an interval isn't known until the beat that <em>closes</em> it arrives — it's a stopwatch read at the finish line of each beat, never before. The stream is just a sequence of these finished lap times.</p>
+    <p>That stream is the whole signal. Heart rate isn't sensed directly — it's simply <code>60000 / RR</code> — and RSA is nothing more than those intervals stretching and shrinking with the breath: shorter on the inhale, as the vagus eases off and the next beat comes sooner; longer on the exhale. Because one slow breath spans roughly ten beats, the beats themselves sample the breathing wave, enough points to trace the curve. The <em class="term">Cycle amplitude</em> metric is the height of that wave — a sinusoid fitted at your breathing frequency through every beat in the window, which is what makes it precise and steady against drift rather than hostage to any single beat. It's reported in <strong>milliseconds of RR</strong>, not bpm, because at a low resting heart rate the bpm swing is compressed and understates a strong RSA — and a chest strap is essential, since the sharp R-peak fixes each beat to under a millisecond where an optical wrist pulse would smear exactly the signal you're chasing.</p>
+
+    <h3>What it does</h3>
+    <p><strong>In the moment</strong>, resonance breathing engages the vagus to draw the body out of arousal and into rest — heart rate drops, HRV rises, the active branch quiets. That makes it a fast wind-down after late, high-intensity training, when arousal is still high near bedtime.</p>
+    <p><strong>Over weeks</strong>, it trains the baroreflex itself: baseline HRV climbs, baroreflex gain increases, and the rested state grows easier to reach with less effort. The evidence is strongest for anxiety, hypertension, and stress regulation [1, 2]; sleep-onset benefits are mechanistically plausible — the same parasympathetic activation eases the body into sleep — and backed by smaller studies, though less firmly established.</p>
+
+    <h3>The process</h3>
+    <ol>
+      <li><strong>Find your resonance frequency</strong> (one-time, ~10 min). Press <strong>Find rate</strong> (the tuning-fork button), lying down or seated — it automatically sweeps a range of breathing rates (default 6.5 → 4.5 brpm), discarding a 30-second settle and then measuring each rate for 90 seconds. The rate that produces the largest <em class="term">Cycle amplitude</em> (the breath-locked heart-rate swing) is your resonance frequency. For most adults it lands between 5.5 and 6.5 brpm; the rates and timing are adjustable in <strong>Settings → Sweep</strong>.</li>
+      <li><strong>Practice daily at that frequency</strong>, 10 to 20 minutes. Breathe through the nose, exhale slightly longer than you inhale (the default here is 40% inhale, 60% exhale). Don't force volume — slow and shallow is fine; air hunger means you're trying too hard.</li>
+      <li><strong>Use it after late, high-intensity training.</strong> 10 to 15 minutes of resonance breathing closes the gap between post-exercise arousal and the calm sleep needs — the bottleneck the late-evening-exercise research [3] finds growing largest after 50.</li>
+    </ol>
+
+    <h3>Pointers</h3>
+    <ul>
+      <li>Watch the <em class="term">Cycle amplitude</em> tile rise as you settle into your rhythm — that climb is the vagal brake engaging.</li>
+      <li>Quiet room, low light, phone elsewhere. The breathing is the work; the visualization is scaffolding — once the rhythm is internalized, the device is optional.</li>
+      <li>A complement to sleep-hygiene basics (cool room, dim light, consistent bedtime, low evening alcohol), not a replacement.</li>
+    </ul>
+
+    <div class="refs">
+      <div class="refs-title">References</div>
+      <ol>
+        <li>Lehrer PM, Vaschillo E, Vaschillo B. <em>Resonant frequency biofeedback training to increase cardiac variability: rationale and manual for training.</em> Appl Psychophysiol Biofeedback. 2000;25(3):177–191.</li>
+        <li>Goessl VC, Curtiss JE, Hofmann SG. <em>The effect of heart rate variability biofeedback training on stress and anxiety: a meta-analysis.</em> Psychol Med. 2017;47(15):2578–2586.</li>
+        <li>Stutz J, Eiholzer R, Spengler CM. <em>Effects of evening exercise on sleep in healthy participants: a systematic review and meta-analysis.</em> Sports Med. 2019;49(2):269–287.</li>
+        <li>Lehrer P, Gevirtz R. <em>Heart rate variability biofeedback: how and why does it work?</em> Front Psychol. 2014;5:756.</li>
+      </ol>
+    </div>
+
+  </div>
+</details>
+
+<details class="drawer" id="methodology-drawer">
+  <summary>Methodology — how this configuration computes your rate</summary>
+  <div class="drawer-content" id="methodology-content"></div>
+</details>
+
+<div class="dev-tools">
+  <button id="demo">Demo mode</button>
+  <span class="size-control">
+    text size
+    <button class="size-btn" id="prose-smaller" aria-label="Smaller">A−</button>
+    <span id="prose-size-display">22px</span>
+    <button class="size-btn" id="prose-larger" aria-label="Larger">A+</button>
+  </span>
+</div>
+
+<script type="module" src="/src/app.js"></script>
+</body>
+</html>
