@@ -293,6 +293,12 @@ function pacerLoop() {
   circle.style.fill = isInhale ? 'var(--inhale)' : 'var(--exhale)';
   label.textContent = phase;
 
+  // Ambient breath wash (practice/breather modes): intensity tracks how full the breath
+  // is (0 at min exhale → 1 at peak inhale), hue follows the phase. CSS reads these vars.
+  const fullness = (r - 40) / 100;
+  document.body.style.setProperty('--breath-fullness', fullness.toFixed(3));
+  document.body.style.setProperty('--breath-color', isInhale ? 'var(--inhale)' : 'var(--exhale)');
+
   // total session timer
   const totalS = Math.floor((performance.now() - state.sessionStart) / 1000);
   const m = Math.floor(totalS / 60), s = totalS % 60;

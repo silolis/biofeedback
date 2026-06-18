@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
 <title>HRV Biofeedback</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%236ee7b7' d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z'/></svg>">
 <link rel="stylesheet" href="/src/styles.css">
@@ -18,6 +20,17 @@
       </svg>
     </button>
     <span class="tool-cap" id="connect-cap">Connect</span>
+  </span>
+  <span class="tool">
+    <button id="practice" class="icon-btn primary" title="Start paced breathing — no strap needed" aria-label="Start paced breathing">
+      <svg id="practice-play-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+        <path d="M7 5l12 7-12 7z"/>
+      </svg>
+      <svg id="practice-stop-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" style="display:none">
+        <rect x="6" y="6" width="12" height="12" rx="1.5"/>
+      </svg>
+    </button>
+    <span class="tool-cap" id="practice-cap">Practice</span>
   </span>
   <span class="tool">
     <button id="record" class="icon-btn" title="Record at the current setting" aria-label="Record at the current setting" disabled>
@@ -346,6 +359,11 @@
 </div>
 
 <footer id="build-stamp" class="build-stamp"></footer>
+
+<!-- Ambient breath wash — full-screen glow that tracks the pacer phase (breather modes only).
+     Lives at the end of <body> so it never disturbs structural selectors like .row:first-of-type;
+     position:fixed + z-index make its source order irrelevant. -->
+<div id="breath-wash" aria-hidden="true"></div>
 
 <script type="module" src="/src/app.js"></script>
 </body>

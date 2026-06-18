@@ -149,6 +149,20 @@ window.addEventListener('keydown', e => {
 document.getElementById('demo').addEventListener('click', toggleDemo);
 document.getElementById('connect').addEventListener('click', connect);
 
+// Web Bluetooth is unavailable in iOS Safari/Chrome (all iOS browsers are WebKit).
+// Rather than a dead Connect button, point the user at the working paths: Demo here,
+// or a Web-Bluetooth browser (Bluefy) for the real strap.
+if (!navigator.bluetooth) {
+  const btn = document.getElementById('connect');
+  btn.classList.remove('primary');          // Practice is the call to action here
+  document.getElementById('connect-cap').textContent = 'No BLE';
+  btn.title = 'Web Bluetooth not supported in this browser';
+  btn.addEventListener('click', e => {
+    e.stopImmediatePropagation();
+    setStatus('No Web Bluetooth here — press Practice to breathe along, or open in Bluefy for the strap.', 'warn');
+  }, true);
+}
+
 //
 // Fullscreen toggle — a distraction-free, screensaver-proof view for long sessions.
 //
@@ -224,6 +238,7 @@ async function startSession() {
   state.lastTickSlot = null;
   state.sessionAmps = [];
   document.getElementById('summary').style.display = 'none';
+  setPracticeRunning(true);
   requestWakeLock();
   if (audio.enabled) await startAudioPacer();
   pacerLoop();
@@ -234,10 +249,36 @@ function stopSession() {
   state.running = false;
   label.textContent = '—';
   circle.setAttribute('r', '60');
+  document.body.style.setProperty('--breath-fullness', '0');
+  setPracticeRunning(false);
   stopAudioPacer();
   releaseWakeLock();
   showSessionSummary();
 }
+
+// Practice / training mode — a strap-free paced-breathing session you start with the
+// play button. Runs the same pacer (circle, audio cues, breath wash) without any
+// heart-rate data, and drops straight into the full-screen breather surface. The one
+// path that works on every device, including iOS where the strap can't connect.
+function setPracticeRunning(running) {
+  document.getElementById('practice-play-icon').style.display = running ? 'none' : '';
+  document.getElementById('practice-stop-icon').style.display = running ? '' : 'none';
+  const btn = document.getElementById('practice');
+  btn.classList.toggle('active', running);
+  document.getElementById('practice-cap').textContent = running ? 'Stop' : 'Practice';
+  const lbl = running ? 'Stop the session' : 'Start paced breathing — no strap needed';
+  btn.title = lbl;
+  btn.setAttribute('aria-label', running ? 'Stop the session' : 'Start paced breathing');
+}
+document.getElementById('practice').addEventListener('click', () => {
+  if (state.running) {
+    stopSession();
+    setViewMode('full');
+  } else {
+    startSession();
+    setViewMode('cue');   // full-screen breath surface — the dedicated practice view
+  }
+});
 
 //
 // Screen Wake Lock — keep the display awake during sessions and long sweeps,

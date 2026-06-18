@@ -11,6 +11,8 @@
     --inhale: #60a5fa;
     --exhale: #f472b6;
     --prose-size: 22px;
+    --breath-fullness: 0;        /* 0 at min exhale → 1 at peak inhale (set by the pacer) */
+    --breath-color: var(--inhale);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -906,6 +908,10 @@
     position: fixed;
     top: 8px;
     right: 12px;
+    left: auto;
+    width: max-content;          /* shrink to the icons; don't stretch to the viewport */
+    flex-wrap: nowrap;
+    justify-content: flex-end;
     background: transparent;
     margin: 0;
     z-index: 100;
@@ -1062,4 +1068,73 @@
     gap: 10px;
     flex-wrap: wrap;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* ============================================================
+     Ambient breath wash — the practice-view signature.
+     A full-screen glow behind the pacer; the pacer loop sets
+     --breath-fullness (0→1) and --breath-color each frame, so the
+     whole screen rises and falls — blue on the inhale, pink on the
+     exhale — the RSA oscillation made ambient. Breather modes only.
+     ============================================================ */
+  #breath-wash {
+    position: fixed;
+    inset: 0;
+    z-index: 0;                 /* above the body's black, below the pacer (lifted to z-index 1) */
+    pointer-events: none;
+    opacity: 0;
+    /* Flat breath-colour tint carried to the screen edges, so the whole screen — not just
+       a halo behind the circle — rises and falls with the breath. */
+    background: var(--breath-color);
+    will-change: opacity;
+  }
+  /* Per-frame opacity from fullness — low, since a full-screen tint reads strongly. */
+  body.mode-cue #breath-wash,
+  body.mode-feedback #breath-wash {
+    opacity: calc(0.04 + var(--breath-fullness) * 0.17);
+  }
+  /* Lift the breather content above the wash. .pacer-wrap is already position:relative and
+     the feedback .metrics bar is already position:fixed — only the stacking order is needed,
+     so don't touch `position` (overriding it would break the fixed metrics bar). */
+  body.mode-cue .pacer-wrap,
+  body.mode-feedback .pacer-wrap,
+  body.mode-feedback .metrics {
+    z-index: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body.mode-cue #breath-wash,
+    body.mode-feedback #breath-wash { opacity: 0.10; }   /* hold steady — no pulsing */
+  }
+
+  /* ============================================================
+     Mobile / touch — the dedicated practice surface.
+     ============================================================ */
+  @media (max-width: 680px) {
+    body { padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); }
+    h1 { font-size: 15px; margin-bottom: 12px; }
+    .row { gap: 10px; }
+    /* Pacer scales to the viewport instead of a fixed 320px (was overflowing). */
+    .pacer-wrap { height: auto; padding: 8px 0; }
+    .pacer-wrap svg { width: min(82vw, 360px); height: auto; }
+    .metrics { grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0 20px; }
+    .controls input[type=range] { width: 100%; }
+  }
+
+  /* Touch devices have no hover, so the breather-mode toolbar can't hide behind :hover.
+     Keep it reachable (and large enough to tap) whenever a session is on the breath. */
+  @media (hover: none) {
+    body.mode-feedback .row:first-of-type,
+    body.mode-cue .row:first-of-type {
+      opacity: 0.55;
+      top: calc(8px + env(safe-area-inset-top));
+    }
+    body.mode-feedback .pacer-wrap svg,
+    body.mode-cue .pacer-wrap svg { width: min(92vw, 460px); height: auto; }
+    body.mode-feedback .pacer-wrap { height: 72vh; }
+    body.mode-cue .pacer-wrap { height: 88vh; }
+    /* Comfortable tap targets in the breather toolbar; icons only, no captions */
+    body.mode-feedback .row:first-of-type .icon-btn,
+    body.mode-cue .row:first-of-type .icon-btn { min-width: 40px; min-height: 40px; }
+    body.mode-feedback .row:first-of-type .tool-cap,
+    body.mode-cue .row:first-of-type .tool-cap { display: none; }
   }
