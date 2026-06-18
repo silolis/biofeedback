@@ -1118,6 +1118,24 @@
     .pacer-wrap svg { width: min(82vw, 360px); height: auto; }
     .metrics { grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0 20px; }
     .controls input[type=range] { width: 100%; }
+
+    /* Feedback mode: spread the four metrics evenly across the full width instead of a
+       fixed 32px gap that crowds them; keep each value on one line. */
+    body.mode-feedback .metrics {
+      left: 0;
+      right: 0;
+      width: 100%;
+      transform: none;
+      gap: 0;
+      justify-content: space-around;
+      padding: 0 8px calc(6px + env(safe-area-inset-bottom));
+      bottom: 6px;
+    }
+    body.mode-feedback .metric { flex: 1 1 0; min-width: 0; opacity: 0.65; }
+    body.mode-feedback .metric .value { font-size: 17px; white-space: nowrap; }
+    body.mode-feedback .metric .value .unit { font-size: 10px; margin-left: 2px; }
+    body.mode-feedback .metric .label { font-size: 9px; letter-spacing: 0.04em; }
+    body.mode-feedback .metric-sub { font-size: 10px; }
   }
 
   /* Touch devices have no hover, so the breather-mode toolbar can't hide behind :hover.
