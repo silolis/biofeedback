@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { computeRsa } from './signal.js';
-import { TICKS_PER_CYCLE, getInhaleFraction } from './pacer-config.js';
+import { getTicksPerCycle, getInhaleFraction } from './pacer-config.js';
 
 //
 // Audio pacer (Web Audio API) — cooldown mode, warm singing-bowl timbre with hall reverb
@@ -220,6 +220,7 @@ function pacerLoop() {
   if (!state.running) return;
   const brpm = parseFloat(document.getElementById('brpm').value);
   const inhaleFrac = getInhaleFraction();
+  const ticksPerCycle = getTicksPerCycle();
   const cycleMs = 60_000 / brpm;
 
   // Continuous breath phase in [0,1): advance by (elapsed time / cycleMs) each frame.
@@ -274,10 +275,10 @@ function pacerLoop() {
   }
   state.lastIsInhale = isInhale;
 
-  // Metronome ticks — TICKS_PER_CYCLE evenly spaced across the cycle. Fire one each
+  // Metronome ticks — ticksPerCycle evenly spaced across the cycle. Fire one each
   // time the phase crosses into a new tick slot; the slot at the start of each phase
   // coincides with that phase's gong (split is locked to integer-tick values).
-  const slot = Math.floor(bp * TICKS_PER_CYCLE);
+  const slot = Math.floor(bp * ticksPerCycle);
   if (slot !== state.lastTickSlot) {
     if (audio.active) (isInhale ? playInhaleTick : playExhaleTick)();
     state.lastTickSlot = slot;

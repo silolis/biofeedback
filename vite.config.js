@@ -1,5 +1,18 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+
+// Build stamp: short commit hash (with -dirty marker) + ISO build time, injected as
+// compile-time constants and rendered in the page footer.
+function gitShortHash() {
+  try {
+    const hash = execSync('git rev-parse --short HEAD').toString().trim();
+    const dirty = execSync('git status --porcelain').toString().trim() ? '-dirty' : '';
+    return hash + dirty;
+  } catch {
+    return 'unknown';
+  }
+}
 
 // Bundles index.html + src/styles.css + the src/*.js modules (app entry → state, signal,
 // feedback, search + estimators-core) into ONE self-contained dist/index.html — keeps the
@@ -13,6 +26,10 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 // directly via Node and are not part of this build.
 export default defineConfig({
   plugins: [viteSingleFile()],
+  define: {
+    __BUILD_HASH__: JSON.stringify(gitShortHash()),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   build: {
     target: 'esnext',            // personal tool on an evergreen browser — no legacy transpile
     cssCodeSplit: false,

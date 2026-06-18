@@ -54,6 +54,14 @@
   button.primary { border-color: var(--accent); color: var(--accent); }
   #statusbar { margin: -8px 0 16px; min-height: 1.2em; }
   #status { color: var(--muted); font-size: 14px; }
+  .build-stamp {
+    margin: 32px 0 8px;
+    color: var(--muted);
+    font-size: 11px;
+    opacity: 0.6;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
   #status.ok { color: var(--accent); }
   #status.warn { color: var(--warn); }
 
@@ -275,7 +283,8 @@
     margin-bottom: 6px;
   }
   .settings-content input[type=text],
-  .settings-content input[type=number] {
+  .settings-content input[type=number],
+  .settings-content select {
     width: 100%;
     background: var(--bg);
     color: var(--fg);

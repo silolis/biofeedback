@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>HRV Biofeedback</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%236ee7b7' d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z'/></svg>">
 <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
@@ -162,10 +163,15 @@
     </div>
     <div class="ctrl-row">
       <div>
-        <label>Inhale beats (rest is exhale)</label>
-        <input type="range" id="inhale-frac" min="3" max="5" step="1" value="4">
+        <label>Inhale / exhale split</label>
+        <select id="inhale-frac">
+          <option value="4/4">4 / 4 beats — equal (1:1)</option>
+          <option value="4/6" selected>4 / 6 beats — gentle (2:3)</option>
+          <option value="2/4">2 / 4 beats — relaxing (1:2), slow count</option>
+          <option value="4/8">4 / 8 beats — relaxing (1:2), fast count</option>
+          <option value="6/6">6 / 6 beats — equal, slow (1:1)</option>
+        </select>
       </div>
-      <div class="val-display"><span id="inhale-display">4 / 6</span> beats</div>
     </div>
   </div>
 </details>
@@ -286,12 +292,12 @@
   <div class="drawer-content">
 
     <h3>Background</h3>
-    <p>Heart rate is not constant — it speeds up slightly when you inhale and slows when you exhale, a pattern called <em class="term">respiratory sinus arrhythmia</em> (RSA); RSA is the breathing-driven part of <em class="term">heart-rate variability</em> (HRV), the overall variation in the time between consecutive heartbeats. The size of that oscillation reflects how strongly the vagus nerve — the main parasympathetic (rest-and-recover) output to the heart — is modulating beat-to-beat timing. Bigger swing means a stronger vagal brake. RSA amplitude is one of the cleanest non-invasive proxies for parasympathetic tone you can measure from outside the body.</p>
-    <p>Strengthening that brake is what the practice trains. The autonomic nervous system has two opposing branches — the <em class="term">sympathetic</em>, which drives arousal (the active, fight-or-flight side that stress and hard training switch on), and the parasympathetic, which settles the body, carried mostly by the vagus. Slow breathing engages the vagus, damping the active branch and easing the body toward rest. At a personal rate — usually 5 to 7 brpm — the breath also falls into step with the <em class="term">baroreflex</em> (which adjusts heart rate to blood-pressure swings) and RSA reaches resonance: the heart-rate oscillation grows large and smooth, breath, heart, and blood pressure rising and falling together — the effect Lehrer, Vaschillo, and colleagues mapped in the early 2000s [1, 4]. The bigger that swing, the more vagal brake you are applying, so <em class="term">Cycle amplitude</em> is the signal this tool exists to grow.</p>
+    <p>Heart rate is not constant — it speeds up slightly when you inhale and slows when you exhale, a pattern called <em class="term">respiratory sinus arrhythmia</em> (RSA); RSA is the breathing-driven part of <em class="term">heart-rate variability</em> (HRV), the overall variation in the time between consecutive heartbeats. The size of that oscillation reflects how strongly the vagus nerve — the main parasympathetic (rest-and-recover) output to the heart — is modulating beat-to-beat timing. Bigger swing means a stronger vagal brake — RSA amplitude is one of the cleanest non-invasive proxies for parasympathetic tone there is.</p>
+    <p>Strengthening that brake is what the practice trains. The autonomic nervous system has two opposing branches — the <em class="term">sympathetic</em>, which drives arousal (the fight-or-flight side stress and hard training switch on), and the parasympathetic, which settles the body, carried mostly by the vagus. Slow breathing engages the vagus, damping the active branch and easing the body toward rest. At a personal rate — usually 5 to 7 brpm — the breath also falls into step with the <em class="term">baroreflex</em> (which adjusts heart rate to blood-pressure swings) and RSA reaches resonance: the heart-rate oscillation grows large and smooth, breath, heart, and blood pressure rising and falling together — the effect Lehrer, Vaschillo, and colleagues mapped in the early 2000s [1, 4]. The bigger that swing, the more vagal brake you are applying, so <em class="term">Cycle amplitude</em> is the signal this tool exists to grow.</p>
 
     <h3>How it's measured</h3>
     <p>The chest strap is a single-lead <em class="term">ECG</em> — two electrodes reading the heart's electrical signal off the skin. It isn't sensing blood flow or pulse; it watches for the <strong>R-peak</strong>, the sharp spike each time the ventricles fire, and timestamps it. What it reports per beat is the <em class="term">RR interval</em>: the time from the previous R-peak to this one, in milliseconds. Crucially, an interval isn't known until the beat that <em>closes</em> it arrives — it's a stopwatch read at the finish line of each beat, never before. The stream is just a sequence of these finished lap times.</p>
-    <p>That stream is the whole signal. Heart rate isn't sensed directly — it's simply <code>60000 / RR</code> — and RSA is nothing more than those intervals stretching and shrinking with the breath: shorter on the inhale, as the vagus eases off and the next beat comes sooner; longer on the exhale. Because one slow breath spans roughly ten beats, the beats themselves sample the breathing wave, enough points to trace the curve. The <em class="term">Cycle amplitude</em> metric is the height of that wave — a sinusoid fitted at your breathing frequency through every beat in the window, which is what makes it precise and steady against drift rather than hostage to any single beat. It's reported in <strong>milliseconds of RR</strong>, not bpm, because at a low resting heart rate the bpm swing is compressed and understates a strong RSA — and a chest strap is essential, since the sharp R-peak fixes each beat to under a millisecond where an optical wrist pulse would smear exactly the signal you're chasing.</p>
+    <p>That stream is the whole signal. Heart rate isn't sensed directly — it's simply <code>60000 / RR</code> — and RSA is nothing more than those intervals stretching and shrinking with the breath: shorter on the inhale, as the vagus eases off and the next beat comes sooner; longer on the exhale. Because one slow breath spans roughly ten beats, the beats themselves sample the breathing wave, enough points to trace the curve. The <em class="term">Cycle amplitude</em> metric is the height of that wave — a sinusoid fitted at your breathing frequency through every beat in the window, which is what makes it precise and steady against drift rather than hostage to any single beat. It's reported in <strong>milliseconds of RR</strong>, not bpm, because at a low resting heart rate the bpm swing is compressed and understates a strong RSA. A chest strap is essential here: the sharp R-peak fixes each beat to under a millisecond, where an optical wrist pulse would smear exactly the signal you're chasing.</p>
 
     <h3>What it does</h3>
     <p><strong>In the moment</strong>, resonance breathing engages the vagus to draw the body out of arousal and into rest — heart rate drops, HRV rises, the active branch quiets. That makes it a fast wind-down after late, high-intensity training, when arousal is still high near bedtime.</p>
@@ -338,6 +344,8 @@
     <button class="size-btn" id="prose-larger" aria-label="Larger">A+</button>
   </span>
 </div>
+
+<footer id="build-stamp" class="build-stamp"></footer>
 
 <script type="module" src="/src/app.js"></script>
 </body>

@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { connect, collectBeat, pruneLog, updateDerivedMetrics, resetFitStores, serializeSample, pipelineSnapshot } from './signal.js';
 import { audio, startAudioPacer, stopAudioPacer, pacerLoop, circle, label, gongTickLevels } from './feedback.js';
 import { updateSweepDesc, cancelSearch, computeSampleStats, downloadJSON, BRPM_KEY } from './search.js';
-import { TICKS_PER_CYCLE, getInhaleFraction } from './pacer-config.js';
+import { getInhaleFraction } from './pacer-config.js';
 
 //
 // UI wiring
@@ -97,7 +97,7 @@ function updateDemoDisplay() {
 window.addEventListener('keydown', e => {
   if (!state.demoActive) return;
   const slider = document.getElementById('brpm');
-  const inhaleSlider = document.getElementById('inhale-frac');
+  const inhaleSelect = document.getElementById('inhale-frac');
   let handled = true;
   switch (e.key) {
     case 'ArrowLeft':
@@ -109,12 +109,12 @@ window.addEventListener('keydown', e => {
       slider.dispatchEvent(new Event('input'));
       break;
     case 'ArrowUp':
-      inhaleSlider.value = Math.min(parseInt(inhaleSlider.max, 10), parseInt(inhaleSlider.value, 10) + 1);
-      inhaleSlider.dispatchEvent(new Event('input'));
+      inhaleSelect.selectedIndex = Math.min(inhaleSelect.options.length - 1, inhaleSelect.selectedIndex + 1);
+      inhaleSelect.dispatchEvent(new Event('change'));
       break;
     case 'ArrowDown':
-      inhaleSlider.value = Math.max(parseInt(inhaleSlider.min, 10), parseInt(inhaleSlider.value, 10) - 1);
-      inhaleSlider.dispatchEvent(new Event('input'));
+      inhaleSelect.selectedIndex = Math.max(0, inhaleSelect.selectedIndex - 1);
+      inhaleSelect.dispatchEvent(new Event('change'));
       break;
     case '+': case '=':
       state.demoBaseline = Math.min(200, state.demoBaseline + 1);
@@ -469,10 +469,6 @@ document.getElementById('brpm').addEventListener('change', e => {
     }
   } catch (_) {}
 })();
-document.getElementById('inhale-frac').addEventListener('input', e => {
-  const inTicks = parseInt(e.target.value, 10);
-  document.getElementById('inhale-display').textContent = `${inTicks} / ${TICKS_PER_CYCLE - inTicks}`;
-});
 ['set-rates', 'set-settle', 'set-measure', 'set-passes', 'set-refine-rounds'].forEach(id =>
   document.getElementById(id).addEventListener('input', updateSweepDesc));
 updateSweepDesc();
@@ -515,5 +511,16 @@ if (new URLSearchParams(location.search).has('dev')) {
   tag.style.cssText = 'color:var(--warn);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-left:8px;';
   document.querySelector('.dev-tools').appendChild(tag);
 }
+
+//
+// Build stamp — values injected by Vite `define` at build time (see vite.config.js).
+//
+(function showBuildStamp() {
+  const el = document.getElementById('build-stamp');
+  if (!el) return;
+  const hash = typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'dev';
+  const time = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : '';
+  el.textContent = `build ${hash}${time ? ' · ' + time : ''}`;
+})();
 
 export { setStatus, startSession, stopSession, setAudioControlsEnabled };
