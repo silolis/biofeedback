@@ -19,11 +19,18 @@ const audio = {
   enabled: false,
   volume: 0.18,
   chimeVolume: 0.22,
+  tickVolume: 0.10,          // metronome ticks — softer than the gong downbeat
   droneLevel: 0.5,           // 0–1 mix scalar for the drone
   chimeLevel: 1.0,           // 0–1 mix scalar for the chimes
-  freqLow: 196,              // G3
-  freqHigh: 220,             // A3 — whole tone glide, much less siren-like than the previous fifth
+  freqLow: 196,              // G3 — fixed drone pitch (breath cue is amplitude, not pitch)
+  freqHigh: 220,             // A3 — used only for the higher inhale gong/tick
 };
+
+// Metronome subdivisions per full breath cycle. With the inhale/exhale split locked
+// to integer-tick values (see index.html), inhaleFrac * TICKS_PER_CYCLE is an integer:
+// 0.4 → 4 ticks inhale / 6 exhale, 0.5 → 5 / 5. The first tick of each phase lands on
+// the same frame as that phase's gong, so the downbeat reads as gong + tick together.
+const TICKS_PER_CYCLE = 10;
 
 // Drone partials — warm balance: fundamental dominant, gentle harmonics, light inharmonic touch.
 // Detuning creates slow "wah" beats characteristic of bowed metal.
@@ -42,6 +49,14 @@ const chimePartials = [
   { ratio: 2.76, amp: 0.18, decay: 2.8, attack: 0.07 },   // small gong tang
   { ratio: 3.0,  amp: 0.18, decay: 2.6, attack: 0.06 },
   { ratio: 4.5,  amp: 0.08, decay: 1.6, attack: 0.04 },
+];
+
+// Tick partials — short, pitched and woody (a "sonorous metronome", not a dry click).
+// Quick attack, short tail, a touch of inharmonic 2nd partial for a wooden knock.
+const tickPartials = [
+  { ratio: 1.0,  amp: 1.00, decay: 0.22, attack: 0.004 },
+  { ratio: 2.01, amp: 0.30, decay: 0.11, attack: 0.003 },   // slight inharmonicity → woody
+  { ratio: 3.0,  amp: 0.10, decay: 0.06, attack: 0.002 },
 ];
 
 function createReverbImpulse(ctx, duration, decay) {
@@ -148,16 +163,10 @@ function updateAudioBreath(isInhale, frac) {
   if (!audio.active || !audio.ctx) return;
   const eased = (1 - Math.cos(Math.PI * frac)) / 2;
 
-  // Subtle pitch glide (default whole tone — well below "siren" perception)
-  const baseFreq = isInhale
-    ? audio.freqLow + (audio.freqHigh - audio.freqLow) * eased
-    : audio.freqHigh - (audio.freqHigh - audio.freqLow) * eased;
-  for (const { osc, ratio } of audio.oscs) {
-    osc.frequency.setTargetAtTime(baseFreq * ratio, audio.ctx.currentTime, 0.08);
-  }
-
+  // The drone holds a fixed pitch — the breath is carried entirely by the amplitude
+  // swell below (and the gongs/ticks). The old pitch glide read as a "siren" and added
+  // nothing, so it was removed.
   // Drone amplitude swell — 60% at exhale-bottom, 100% at inhale-top.
-  // This is the primary breath cue; pitch is now a small secondary motion.
   // audio.droneLevel applies the user's drone-vs-gong mix scalar.
   const breathLevel = isInhale ? 0.6 + 0.4 * eased : 1.0 - 0.4 * eased;
   audio.breathGain.gain.setTargetAtTime(
@@ -189,11 +198,38 @@ function playChime(fundamental, gainScale = 1.0) {
   }
 }
 
-// Two chimes per breath cycle — each anchored an octave above its drone position.
-// "Bottom" — start of inhale, drone at freqLow → low-pitched gong (matches the low position).
-// "Top"    — start of exhale, drone at freqHigh → higher-pitched gong (matches the high position).
-function playBottomChime() { playChime(audio.freqLow  * 2, 1.0); }
-function playTopChime()    { playChime(audio.freqHigh * 2, 0.85); }
+// A short pitched percussion hit — the metronome subdivision within a phase.
+function playTick(fundamental, gainScale = 1.0) {
+  if (!audio.active || !audio.ctx) return;
+  if (audio.chimeLevel <= 0) return;          // ticks ride the same gong mix scalar
+  const ctx = audio.ctx;
+  const t = ctx.currentTime;
+  const master = audio.tickVolume * audio.volume * 7 * gainScale * audio.chimeLevel;
+
+  for (const p of tickPartials) {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = fundamental * p.ratio;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(master * p.amp, 0.0002), t + p.attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + p.attack + p.decay);
+    osc.connect(g);
+    g.connect(audio.master);        // ticks go to master (bypass breathGain — stay punchy)
+    osc.start(t);
+    osc.stop(t + p.attack + p.decay + 0.1);
+  }
+}
+
+// One gong per phase, an octave above the drone. Inhale gets the higher pitch (freqHigh),
+// exhale the slightly lower one (freqLow). Each lands on the phase's first metronome tick.
+function playInhaleGong() { playChime(audio.freqHigh * 2, 1.0);  }
+function playExhaleGong() { playChime(audio.freqLow  * 2, 0.9);  }
+
+// Tick pitch follows its phase's gong (one octave down = the drone register),
+// so each phase keeps a consistent pitch identity.
+function playInhaleTick() { playTick(audio.freqHigh, 1.0);  }
+function playExhaleTick() { playTick(audio.freqLow,  1.0);  }
 
 //
 // Breathing pacer
@@ -250,14 +286,23 @@ function pacerLoop() {
         document.getElementById('record').title = `Stop recording (${amps.length} cycles)`;
       }
     }
-    if (audio.active) playBottomChime();
+    if (audio.active) playInhaleGong();
   }
 
-  // Inhale → exhale transition — fire TOP chime (softer, lower release cue)
+  // Inhale → exhale transition — fire the exhale gong (lower pitch)
   if (state.lastIsInhale === true && isInhale === false) {
-    if (audio.active) playTopChime();
+    if (audio.active) playExhaleGong();
   }
   state.lastIsInhale = isInhale;
+
+  // Metronome ticks — TICKS_PER_CYCLE evenly spaced across the cycle. Fire one each
+  // time the phase crosses into a new tick slot; the slot at the start of each phase
+  // coincides with that phase's gong (split is locked to integer-tick values).
+  const slot = Math.floor(bp * TICKS_PER_CYCLE);
+  if (slot !== state.lastTickSlot) {
+    if (audio.active) (isInhale ? playInhaleTick : playExhaleTick)();
+    state.lastTickSlot = slot;
+  }
 
   // radius from 40 to 140 with sinusoidal easing
   const eased = (1 - Math.cos(Math.PI * frac)) / 2; // 0→1 with smooth ends

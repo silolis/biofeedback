@@ -220,6 +220,7 @@ async function startSession() {
   state.breathPhase = 0;
   state.lastFrameT = null;
   state.lastIsInhale = null;
+  state.lastTickSlot = null;
   state.sessionAmps = [];
   document.getElementById('summary').style.display = 'none';
   requestWakeLock();

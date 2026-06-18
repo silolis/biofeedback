@@ -17,6 +17,7 @@ const state = {
   breathPhase: 0,      // continuous breath phase [0,1) — keeps the cue smooth across brpm changes
   lastFrameT: null,    // timestamp of previous pacer frame, for phase advance
   lastIsInhale: null,
+  lastTickSlot: null,  // index of the metronome tick last fired this cycle
   sessionAmps: [],    // per-cycle amplitudes for end-of-session summary
   recording: { active: false },   // single-setting recording (sweep JSON format, one sample)
   wakeLock: null,     // Screen Wake Lock sentinel — held while a session runs to block screensaver/sleep
