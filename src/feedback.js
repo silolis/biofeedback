@@ -73,6 +73,13 @@ function createReverbImpulse(ctx, duration, decay) {
 
 async function ensureAudio() {
   if (audio.ctx) return;
+
+  // iOS: by default Web Audio is routed through a session that the hardware mute/silent
+  // switch silences — so cues are inaudible whenever the ringer switch is off, with no
+  // other symptom. Declaring 'playback' makes the cues sound regardless of that switch
+  // (the right behaviour for a guided-breathing pacer). Safari 16.4+; ignored elsewhere.
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) {}
+
   audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
 
   // Final fader: volume + on/off envelope. Both buses sum here, then out.
