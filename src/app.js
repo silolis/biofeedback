@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { connect, collectBeat, pruneLog, updateDerivedMetrics, resetFitStores, serializeSample, pipelineSnapshot } from './signal.js';
-import { audio, startAudioPacer, stopAudioPacer, pacerLoop, circle, label } from './feedback.js';
+import { audio, startAudioPacer, stopAudioPacer, pacerLoop, circle, label, gongTickLevels } from './feedback.js';
 import { updateSweepDesc, cancelSearch, computeSampleStats, downloadJSON, BRPM_KEY } from './search.js';
 import { TICKS_PER_CYCLE, getInhaleFraction } from './pacer-config.js';
 
@@ -334,7 +334,7 @@ function stopRecording() {
 //
 // Audio cue controls (volume, pitch, mix) are inert until the master toggle is on.
 function setAudioControlsEnabled(on) {
-  ['volume', 'freq-low', 'freq-high', 'chime-level']
+  ['volume', 'freq-low', 'freq-high', 'mix-level']
     .forEach(id => document.getElementById(id).disabled = !on);
 }
 
@@ -356,9 +356,11 @@ document.getElementById('volume').addEventListener('input', (e) => {
   }
 });
 
-document.getElementById('chime-level').addEventListener('input', (e) => {
-  audio.chimeLevel = parseFloat(e.target.value);
-  document.getElementById('chime-level-display').textContent = Math.round(audio.chimeLevel * 100);
+document.getElementById('mix-level').addEventListener('input', (e) => {
+  audio.mix = parseFloat(e.target.value);
+  const { gong, tick } = gongTickLevels(audio.mix);
+  document.getElementById('mix-level-display').textContent =
+    `G ${Math.round(gong * 100)} · T ${Math.round(tick * 100)}`;
 });
 
 

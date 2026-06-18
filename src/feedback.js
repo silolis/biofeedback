@@ -7,20 +7,31 @@ import { TICKS_PER_CYCLE, getInhaleFraction } from './pacer-config.js';
 //
 const audio = {
   ctx: null,
-  master: null,              // volume control point
-  lowpass: null,
+  master: null,              // final fader (volume + on/off) — everything sums here
+  lowpass: null,             // warm filter on the gong bus
   dryGain: null,
   wetGain: null,
   reverb: null,
+  tickBus: null,             // ticks' own mostly-dry/bright bus (keeps the wood tight)
+  noiseBuf: null,            // short white-noise buffer reused for the tick impact knock
   active: false,
   enabled: false,
   volume: 0.18,
   chimeVolume: 0.22,
-  tickVolume: 0.16,          // metronome ticks — softer than the gong downbeat
-  chimeLevel: 1.0,           // 0–1 mix scalar for the gongs + ticks
+  tickVolume: 0.20,          // metronome ticks (bright bus runs a touch hotter)
+  mix: 0.5,                  // gong↔tick balance: 0 = gong only, 1 = ticks only, 0.5 = both full
   freqLow: 196,              // G3 — exhale gong/tick register
   freqHigh: 220,             // A3 — inhale gong/tick register
 };
+
+// Single mixer between the two cues. Centre keeps both at full; turning toward an
+// end fades the other out — so it reads as one "gong ↔ ticks" balance slider.
+function gongTickLevels(mix) {
+  return {
+    gong: mix <= 0.5 ? 1 : 1 - (mix - 0.5) * 2,
+    tick: mix >= 0.5 ? 1 : mix * 2,
+  };
+}
 
 // Chime partials — slower attack, longer tail, less upper harmonic content.
 const chimePartials = [
@@ -31,12 +42,14 @@ const chimePartials = [
   { ratio: 4.5,  amp: 0.08, decay: 1.6, attack: 0.04 },
 ];
 
-// Tick partials — short, pitched and woody (a "sonorous metronome", not a dry click).
-// Quick attack, short tail, a touch of inharmonic 2nd partial for a wooden knock.
+// Tick partials — a struck-wood "tock". Inharmonic, fast-decaying overtones (like a
+// temple block / claves) and a triangle body for odd-harmonic bite. Short tails so it
+// reads as a knock, not a chime. The impact noise burst and onset pitch-drop in
+// playTick() do the rest of the woody work.
 const tickPartials = [
-  { ratio: 1.0,  amp: 1.00, decay: 0.22, attack: 0.004 },
-  { ratio: 2.01, amp: 0.30, decay: 0.11, attack: 0.003 },   // slight inharmonicity → woody
-  { ratio: 3.0,  amp: 0.10, decay: 0.06, attack: 0.002 },
+  { ratio: 1.0,  amp: 1.00, decay: 0.16, attack: 0.002, type: 'triangle' },  // body
+  { ratio: 2.7,  amp: 0.38, decay: 0.07, attack: 0.001 },                    // inharmonic ring
+  { ratio: 5.2,  amp: 0.14, decay: 0.035, attack: 0.001 },                   // high knock
 ];
 
 function createReverbImpulse(ctx, duration, decay) {
@@ -62,30 +75,44 @@ async function ensureAudio() {
   if (audio.ctx) return;
   audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
 
+  // Final fader: volume + on/off envelope. Both buses sum here, then out.
   audio.master = audio.ctx.createGain();
   audio.master.gain.value = 0;
+  audio.master.connect(audio.ctx.destination);
 
-  // Warm low-pass — pulls upper harmonics well down for a softer, less metallic body.
-  audio.lowpass = audio.ctx.createBiquadFilter();
-  audio.lowpass.type = 'lowpass';
-  audio.lowpass.frequency.value = 1500;
-  audio.lowpass.Q.value = 0.5;
-
-  // Algorithmic hall reverb via convolution with synthesized IR.
+  // Algorithmic hall reverb via convolution with synthesized IR (shared).
   audio.reverb = audio.ctx.createConvolver();
   audio.reverb.buffer = createReverbImpulse(audio.ctx, 4.2, 2.8);
-
-  audio.dryGain = audio.ctx.createGain();
   audio.wetGain = audio.ctx.createGain();
-  audio.dryGain.gain.value = 0.55;
-  audio.wetGain.gain.value = 0.55;   // generous wet mix — what de-synthesizes the sound
+  audio.wetGain.gain.value = 0.55;   // generous wet mix — what de-synthesizes the gong
+  audio.reverb.connect(audio.wetGain);
+  audio.wetGain.connect(audio.master);
 
-  audio.master.connect(audio.lowpass);
+  // Gong bus — warm low-pass into the hall, kept lush.
+  audio.lowpass = audio.ctx.createBiquadFilter();
+  audio.lowpass.type = 'lowpass';
+  audio.lowpass.frequency.value = 1500;   // pulls upper harmonics down for a soft body
+  audio.lowpass.Q.value = 0.5;
+  audio.dryGain = audio.ctx.createGain();
+  audio.dryGain.gain.value = 0.55;
   audio.lowpass.connect(audio.dryGain);
   audio.lowpass.connect(audio.reverb);
-  audio.reverb.connect(audio.wetGain);
-  audio.dryGain.connect(audio.ctx.destination);
-  audio.wetGain.connect(audio.ctx.destination);
+  audio.dryGain.connect(audio.master);
+
+  // Tick bus — mostly dry and full-band so the wooden knock stays tight and present
+  // (the gong's lowpass + lush reverb would smear it). Only a light room send.
+  audio.tickBus = audio.ctx.createGain();
+  audio.tickBus.connect(audio.master);             // dry path
+  const tickSend = audio.ctx.createGain();
+  tickSend.gain.value = 0.12;                       // subtle room around the tick
+  audio.tickBus.connect(tickSend);
+  tickSend.connect(audio.reverb);
+
+  // Short white-noise buffer reused for each tick's impact transient.
+  const nlen = Math.floor(audio.ctx.sampleRate * 0.08);
+  audio.noiseBuf = audio.ctx.createBuffer(1, nlen, audio.ctx.sampleRate);
+  const nd = audio.noiseBuf.getChannelData(0);
+  for (let i = 0; i < nlen; i++) nd[i] = Math.random() * 2 - 1;
 }
 
 async function startAudioPacer() {
@@ -109,10 +136,10 @@ function stopAudioPacer() {
 
 function playChime(fundamental, gainScale = 1.0) {
   if (!audio.active || !audio.ctx) return;
-  if (audio.chimeLevel <= 0) return;          // user has gong silenced
+  const level = audio.chimeVolume * audio.volume * 7 * gainScale * gongTickLevels(audio.mix).gong;
+  if (level <= 0) return;                      // gong faded out by the mixer
   const ctx = audio.ctx;
   const t = ctx.currentTime;
-  const master = audio.chimeVolume * audio.volume * 7 * gainScale * audio.chimeLevel;
 
   for (const p of chimePartials) {
     const osc = ctx.createOscillator();
@@ -120,37 +147,57 @@ function playChime(fundamental, gainScale = 1.0) {
     osc.frequency.value = fundamental * p.ratio;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.setTargetAtTime(master * p.amp, t, p.attack / 3);
-    g.gain.setTargetAtTime(master * p.amp, t + p.attack * 0.9, 0.001);
+    g.gain.setTargetAtTime(level * p.amp, t, p.attack / 3);
+    g.gain.setTargetAtTime(level * p.amp, t + p.attack * 0.9, 0.001);
     g.gain.exponentialRampToValueAtTime(0.0001, t + p.attack + p.decay);
     osc.connect(g);
-    g.connect(audio.master);
+    g.connect(audio.lowpass);                  // gong → warm bus
     osc.start(t);
     osc.stop(t + p.attack + p.decay + 0.3);
   }
 }
 
-// A short pitched percussion hit — the metronome subdivision within a phase.
+// A short struck-wood "tock" — the metronome subdivision within a phase.
 function playTick(fundamental, gainScale = 1.0) {
   if (!audio.active || !audio.ctx) return;
-  if (audio.chimeLevel <= 0) return;          // ticks ride the same gong mix scalar
+  const level = audio.tickVolume * audio.volume * 7 * gainScale * gongTickLevels(audio.mix).tick;
+  if (level <= 0) return;                      // ticks faded out by the mixer
   const ctx = audio.ctx;
   const t = ctx.currentTime;
-  const master = audio.tickVolume * audio.volume * 7 * gainScale * audio.chimeLevel;
 
+  // Pitched body — inharmonic, fast-decaying, with a quick downward pitch blip at the
+  // onset that gives wood its characteristic "tock" rather than a flat beep.
   for (const p of tickPartials) {
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = fundamental * p.ratio;
+    osc.type = p.type || 'sine';
+    const f = fundamental * p.ratio;
+    osc.frequency.setValueAtTime(f * 1.5, t);
+    osc.frequency.exponentialRampToValueAtTime(f, t + 0.016);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(master * p.amp, 0.0002), t + p.attack);
+    g.gain.exponentialRampToValueAtTime(Math.max(level * p.amp, 0.0002), t + p.attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + p.attack + p.decay);
     osc.connect(g);
-    g.connect(audio.master);
+    g.connect(audio.tickBus);
     osc.start(t);
     osc.stop(t + p.attack + p.decay + 0.1);
   }
+
+  // Impact transient — a band-passed noise burst is the actual "knock" of wood.
+  const nb = ctx.createBufferSource();
+  nb.buffer = audio.noiseBuf;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = fundamental * 2.5;
+  bp.Q.value = 1.1;
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(Math.max(level * 0.6, 0.0002), t);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.022);
+  nb.connect(bp);
+  bp.connect(ng);
+  ng.connect(audio.tickBus);
+  nb.start(t);
+  nb.stop(t + 0.06);
 }
 
 // One gong per phase. Inhale gets the higher pitch (freqHigh), exhale the slightly
@@ -253,4 +300,4 @@ function pacerLoop() {
   requestAnimationFrame(pacerLoop);
 }
 
-export { audio, startAudioPacer, stopAudioPacer, pacerLoop, circle, label };
+export { audio, startAudioPacer, stopAudioPacer, pacerLoop, circle, label, gongTickLevels };
