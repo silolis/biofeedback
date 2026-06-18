@@ -1119,6 +1119,10 @@
     .metrics { grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0 20px; }
     .controls input[type=range] { width: 100%; }
 
+    /* Feedback mode keeps the graph on desktop, but it's just a cramped empty panel on a
+       phone — drop it so the breather + metrics get the full screen. */
+    body.mode-feedback canvas { display: none !important; }
+
     /* Feedback mode: spread the four metrics evenly across the full width instead of a
        fixed 32px gap that crowds them; keep each value on one line. */
     body.mode-feedback .metrics {
