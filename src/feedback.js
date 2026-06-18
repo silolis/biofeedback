@@ -1,46 +1,26 @@
 import { state } from './state.js';
 import { computeRsa } from './signal.js';
+import { TICKS_PER_CYCLE, getInhaleFraction } from './pacer-config.js';
 
 //
 // Audio pacer (Web Audio API) — cooldown mode, warm singing-bowl timbre with hall reverb
 //
 const audio = {
   ctx: null,
-  oscs: [],
   master: null,              // volume control point
-  breathGain: null,          // drone-only amplitude modulator, follows breath
   lowpass: null,
   dryGain: null,
   wetGain: null,
   reverb: null,
-  lfo: null,
-  lfoGain: null,
   active: false,
   enabled: false,
   volume: 0.18,
   chimeVolume: 0.22,
-  tickVolume: 0.10,          // metronome ticks — softer than the gong downbeat
-  droneLevel: 0.5,           // 0–1 mix scalar for the drone
-  chimeLevel: 1.0,           // 0–1 mix scalar for the chimes
-  freqLow: 196,              // G3 — fixed drone pitch (breath cue is amplitude, not pitch)
-  freqHigh: 220,             // A3 — used only for the higher inhale gong/tick
+  tickVolume: 0.16,          // metronome ticks — softer than the gong downbeat
+  chimeLevel: 1.0,           // 0–1 mix scalar for the gongs + ticks
+  freqLow: 196,              // G3 — exhale gong/tick register
+  freqHigh: 220,             // A3 — inhale gong/tick register
 };
-
-// Metronome subdivisions per full breath cycle. With the inhale/exhale split locked
-// to integer-tick values (see index.html), inhaleFrac * TICKS_PER_CYCLE is an integer:
-// 0.4 → 4 ticks inhale / 6 exhale, 0.5 → 5 / 5. The first tick of each phase lands on
-// the same frame as that phase's gong, so the downbeat reads as gong + tick together.
-const TICKS_PER_CYCLE = 10;
-
-// Drone partials — warm balance: fundamental dominant, gentle harmonics, light inharmonic touch.
-// Detuning creates slow "wah" beats characteristic of bowed metal.
-const dronePartials = [
-  { ratio: 1.0,  amp: 1.00, detune: 0  },
-  { ratio: 2.0,  amp: 0.30, detune: 3  },
-  { ratio: 3.0,  amp: 0.10, detune: -4 },
-  { ratio: 2.76, amp: 0.08, detune: 5  },   // inharmonic — kept low for warm character
-  { ratio: 4.0,  amp: 0.04, detune: -2 },
-];
 
 // Chime partials — slower attack, longer tail, less upper harmonic content.
 const chimePartials = [
@@ -85,12 +65,6 @@ async function ensureAudio() {
   audio.master = audio.ctx.createGain();
   audio.master.gain.value = 0;
 
-  // Drone-only modulator: swells during inhale, eases during exhale.
-  // Chimes bypass this so they stay punchy regardless of breath phase.
-  audio.breathGain = audio.ctx.createGain();
-  audio.breathGain.gain.value = DRONE_LOUDNESS_SCALE * 0.6;   // start at exhale-bottom level
-  audio.breathGain.connect(audio.master);
-
   // Warm low-pass — pulls upper harmonics well down for a softer, less metallic body.
   audio.lowpass = audio.ctx.createBiquadFilter();
   audio.lowpass.type = 'lowpass';
@@ -112,31 +86,7 @@ async function ensureAudio() {
   audio.reverb.connect(audio.wetGain);
   audio.dryGain.connect(audio.ctx.destination);
   audio.wetGain.connect(audio.ctx.destination);
-
-  // Slow LFO modulates master gain — adds organic swell (~±5%, ~8s period).
-  audio.lfo = audio.ctx.createOscillator();
-  audio.lfo.frequency.value = 0.12;
-  audio.lfoGain = audio.ctx.createGain();
-  audio.lfoGain.gain.value = 0;             // off until pacer starts
-  audio.lfo.connect(audio.lfoGain);
-  audio.lfoGain.connect(audio.master.gain);
-  audio.lfo.start();
-
-  for (const p of dronePartials) {
-    const osc = audio.ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = audio.freqLow * p.ratio;
-    osc.detune.value = p.detune;
-    const g = audio.ctx.createGain();
-    g.gain.value = p.amp;
-    osc.connect(g);
-    g.connect(audio.breathGain);   // drone path runs through breathGain
-    osc.start();
-    audio.oscs.push({ osc, ratio: p.ratio });
-  }
 }
-
-const DRONE_LOUDNESS_SCALE = 0.55;
 
 async function startAudioPacer() {
   await ensureAudio();
@@ -145,7 +95,6 @@ async function startAudioPacer() {
   audio.master.gain.cancelScheduledValues(now);
   audio.master.gain.setValueAtTime(audio.master.gain.value, now);
   audio.master.gain.linearRampToValueAtTime(audio.volume, now + 2.2);
-  audio.lfoGain.gain.setTargetAtTime(0.012, now + 0.5, 0.6);
   audio.active = true;
 }
 
@@ -155,24 +104,7 @@ function stopAudioPacer() {
   audio.master.gain.cancelScheduledValues(now);
   audio.master.gain.setValueAtTime(audio.master.gain.value, now);
   audio.master.gain.linearRampToValueAtTime(0, now + 1.4);
-  audio.lfoGain.gain.setTargetAtTime(0, now, 0.25);            // fade LFO out cleanly
   audio.active = false;
-}
-
-function updateAudioBreath(isInhale, frac) {
-  if (!audio.active || !audio.ctx) return;
-  const eased = (1 - Math.cos(Math.PI * frac)) / 2;
-
-  // The drone holds a fixed pitch — the breath is carried entirely by the amplitude
-  // swell below (and the gongs/ticks). The old pitch glide read as a "siren" and added
-  // nothing, so it was removed.
-  // Drone amplitude swell — 60% at exhale-bottom, 100% at inhale-top.
-  // audio.droneLevel applies the user's drone-vs-gong mix scalar.
-  const breathLevel = isInhale ? 0.6 + 0.4 * eased : 1.0 - 0.4 * eased;
-  audio.breathGain.gain.setTargetAtTime(
-    DRONE_LOUDNESS_SCALE * breathLevel * audio.droneLevel,
-    audio.ctx.currentTime, 0.18
-  );
 }
 
 function playChime(fundamental, gainScale = 1.0) {
@@ -192,7 +124,7 @@ function playChime(fundamental, gainScale = 1.0) {
     g.gain.setTargetAtTime(master * p.amp, t + p.attack * 0.9, 0.001);
     g.gain.exponentialRampToValueAtTime(0.0001, t + p.attack + p.decay);
     osc.connect(g);
-    g.connect(audio.master);        // chimes go to master (bypass breathGain — stay punchy)
+    g.connect(audio.master);
     osc.start(t);
     osc.stop(t + p.attack + p.decay + 0.3);
   }
@@ -215,21 +147,21 @@ function playTick(fundamental, gainScale = 1.0) {
     g.gain.exponentialRampToValueAtTime(Math.max(master * p.amp, 0.0002), t + p.attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + p.attack + p.decay);
     osc.connect(g);
-    g.connect(audio.master);        // ticks go to master (bypass breathGain — stay punchy)
+    g.connect(audio.master);
     osc.start(t);
     osc.stop(t + p.attack + p.decay + 0.1);
   }
 }
 
-// One gong per phase, an octave above the drone. Inhale gets the higher pitch (freqHigh),
-// exhale the slightly lower one (freqLow). Each lands on the phase's first metronome tick.
+// One gong per phase. Inhale gets the higher pitch (freqHigh), exhale the slightly
+// lower one (freqLow). Each lands on the phase's first metronome tick.
 function playInhaleGong() { playChime(audio.freqHigh * 2, 1.0);  }
 function playExhaleGong() { playChime(audio.freqLow  * 2, 0.9);  }
 
-// Tick pitch follows its phase's gong (one octave down = the drone register),
-// so each phase keeps a consistent pitch identity.
-function playInhaleTick() { playTick(audio.freqHigh, 1.0);  }
-function playExhaleTick() { playTick(audio.freqLow,  1.0);  }
+// Ticks sit in the same register as their phase's gong so each phase keeps a
+// consistent pitch identity and the ticks cut clearly through the mix.
+function playInhaleTick() { playTick(audio.freqHigh * 2, 1.0);  }
+function playExhaleTick() { playTick(audio.freqLow  * 2, 1.0);  }
 
 //
 // Breathing pacer
@@ -240,7 +172,7 @@ const label = document.getElementById('pacer-label');
 function pacerLoop() {
   if (!state.running) return;
   const brpm = parseFloat(document.getElementById('brpm').value);
-  const inhaleFrac = parseFloat(document.getElementById('inhale-frac').value);
+  const inhaleFrac = getInhaleFraction();
   const cycleMs = 60_000 / brpm;
 
   // Continuous breath phase in [0,1): advance by (elapsed time / cycleMs) each frame.
@@ -266,7 +198,7 @@ function pacerLoop() {
     phase = 'EXHALE';
   }
 
-  // Cycle boundary — phase wrapped past 1.0: log amplitude and fire BOTTOM chime
+  // Cycle boundary — phase wrapped past 1.0: log amplitude and fire the inhale gong
   if (wrapped) {
     // Store the full-precision fitted amplitude in ms — never round before storing.
     // (Rounding/truncation happens only at display time.)
@@ -312,7 +244,6 @@ function pacerLoop() {
   circle.setAttribute('r', r.toFixed(1));
   circle.style.fill = isInhale ? 'var(--inhale)' : 'var(--exhale)';
   label.textContent = phase;
-  updateAudioBreath(isInhale, frac);
 
   // total session timer
   const totalS = Math.floor((performance.now() - state.sessionStart) / 1000);

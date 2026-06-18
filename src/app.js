@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { connect, collectBeat, pruneLog, updateDerivedMetrics, resetFitStores, serializeSample, pipelineSnapshot } from './signal.js';
 import { audio, startAudioPacer, stopAudioPacer, pacerLoop, circle, label } from './feedback.js';
 import { updateSweepDesc, cancelSearch, computeSampleStats, downloadJSON, BRPM_KEY } from './search.js';
+import { TICKS_PER_CYCLE, getInhaleFraction } from './pacer-config.js';
 
 //
 // UI wiring
@@ -49,7 +50,7 @@ function scheduleDemoBeat() {
   let effectiveRsa = state.demoRsaAmp;
   if (state.running && state.sessionStart !== null) {
     const brpm = parseFloat(document.getElementById('brpm').value);
-    const inhaleFrac = parseFloat(document.getElementById('inhale-frac').value);
+    const inhaleFrac = getInhaleFraction();
     // Use the pacer's continuous breath phase so simulated HR tracks the smooth cue.
     const bp = state.breathPhase;
     if (bp < inhaleFrac) {
@@ -108,11 +109,11 @@ window.addEventListener('keydown', e => {
       slider.dispatchEvent(new Event('input'));
       break;
     case 'ArrowUp':
-      inhaleSlider.value = Math.min(parseFloat(inhaleSlider.max), parseFloat(inhaleSlider.value) + 0.01).toFixed(2);
+      inhaleSlider.value = Math.min(parseInt(inhaleSlider.max, 10), parseInt(inhaleSlider.value, 10) + 1);
       inhaleSlider.dispatchEvent(new Event('input'));
       break;
     case 'ArrowDown':
-      inhaleSlider.value = Math.max(parseFloat(inhaleSlider.min), parseFloat(inhaleSlider.value) - 0.01).toFixed(2);
+      inhaleSlider.value = Math.max(parseInt(inhaleSlider.min, 10), parseInt(inhaleSlider.value, 10) - 1);
       inhaleSlider.dispatchEvent(new Event('input'));
       break;
     case '+': case '=':
@@ -275,7 +276,7 @@ function startRecording() {
   if (!state.running) { setStatus('Connect a strap or enable Demo first', 'warn'); return; }
   if (state.search.status === 'running') { setStatus('Sweep in progress — cancel it first', 'warn'); return; }
   const rate = parseFloat(document.getElementById('brpm').value);
-  const inhaleFraction = parseFloat(document.getElementById('inhale-frac').value);
+  const inhaleFraction = getInhaleFraction();
   const now = performance.now();
   state.recording = {
     active: true,
@@ -333,7 +334,7 @@ function stopRecording() {
 //
 // Audio cue controls (volume, pitch, mix) are inert until the master toggle is on.
 function setAudioControlsEnabled(on) {
-  ['volume', 'freq-low', 'freq-high', 'drone-level', 'chime-level']
+  ['volume', 'freq-low', 'freq-high', 'chime-level']
     .forEach(id => document.getElementById(id).disabled = !on);
 }
 
@@ -355,11 +356,6 @@ document.getElementById('volume').addEventListener('input', (e) => {
   }
 });
 
-document.getElementById('drone-level').addEventListener('input', (e) => {
-  audio.droneLevel = parseFloat(e.target.value);
-  document.getElementById('drone-level-display').textContent = Math.round(audio.droneLevel * 100);
-  // pacerLoop calls updateAudioBreath every frame — it picks up the new value automatically.
-});
 document.getElementById('chime-level').addEventListener('input', (e) => {
   audio.chimeLevel = parseFloat(e.target.value);
   document.getElementById('chime-level-display').textContent = Math.round(audio.chimeLevel * 100);
@@ -395,12 +391,7 @@ function onPitchInput() {
   if (isNaN(lo) || isNaN(hi) || hi <= lo) return;
   audio.freqLow = lo;
   audio.freqHigh = hi;
-  // Update existing oscillators immediately if running so the change is audible
-  if (audio.active && audio.ctx) {
-    for (const { osc, ratio } of audio.oscs) {
-      osc.frequency.setTargetAtTime(lo * ratio, audio.ctx.currentTime, 0.2);
-    }
-  }
+  // Gongs and ticks are synthesized per-hit, so the new pitch applies to the next one.
   updatePitchDisplay();
 }
 document.getElementById('freq-low').addEventListener('input', onPitchInput);
@@ -477,7 +468,8 @@ document.getElementById('brpm').addEventListener('change', e => {
   } catch (_) {}
 })();
 document.getElementById('inhale-frac').addEventListener('input', e => {
-  document.getElementById('inhale-display').textContent = Math.round(parseFloat(e.target.value) * 100);
+  const inTicks = parseInt(e.target.value, 10);
+  document.getElementById('inhale-display').textContent = `${inTicks} / ${TICKS_PER_CYCLE - inTicks}`;
 });
 ['set-rates', 'set-settle', 'set-measure', 'set-passes', 'set-refine-rounds'].forEach(id =>
   document.getElementById(id).addEventListener('input', updateSweepDesc));

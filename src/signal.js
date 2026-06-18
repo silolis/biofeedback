@@ -1,6 +1,7 @@
 import { FILTERS, filterMinSamples, filterMinSpanSec, runPipeline, fitPeakToTrough } from './estimators-core.mjs';
 import { state } from './state.js';
 import { setStatus, startSession, stopSession } from './app.js';
+import { getInhaleFraction } from './pacer-config.js';
 
 //
 // BLE
@@ -499,7 +500,7 @@ function drawChart() {
   // Breath-phase overlay (only when running)
   if (state.running && state.sessionStart) {
     const brpm = parseFloat(document.getElementById('brpm').value);
-    const inhaleFrac = parseFloat(document.getElementById('inhale-frac').value);
+    const inhaleFrac = getInhaleFraction();
     const cycleMs = 60_000 / brpm;
     const inhaleMs = cycleMs * inhaleFrac;
     const firstCycleStart = state.sessionStart + Math.floor((tMin - state.sessionStart) / cycleMs) * cycleMs;

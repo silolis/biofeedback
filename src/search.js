@@ -3,6 +3,7 @@ import { FILTERS, runPipeline, fitPeakToTrough, fitR2, fitModel } from './estima
 import { measurementStages, pipelineSnapshot, serializeSample } from './signal.js';
 import { audio, startAudioPacer, stopAudioPacer } from './feedback.js';
 import { setStatus, startSession, setAudioControlsEnabled } from './app.js';
+import { getInhaleFraction } from './pacer-config.js';
 
 // Analyzer selection (composable searches) — toggles for which analyzers run, persisted.
 const ANALYZERS_KEY = 'hrv:analyzers';
@@ -193,7 +194,7 @@ function startSearch() {
     passes: sweep.passes,
     settleSeconds: sweep.settleSeconds,
     measureSeconds: sweep.measureSeconds,
-    inhaleFraction: parseFloat(document.getElementById('inhale-frac').value),
+    inhaleFraction: getInhaleFraction(),
   };
   // A fresh sweep (toolbar) starts a new program — reset the auto-refine counter AND the measurement
   // pool. A continuation (auto-refine / manual refine / re-run) keeps both, so earlier stages' samples

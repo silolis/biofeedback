@@ -162,10 +162,10 @@
     </div>
     <div class="ctrl-row">
       <div>
-        <label>Inhale fraction (rest is exhale)</label>
-        <input type="range" id="inhale-frac" min="0.3" max="0.5" step="0.1" value="0.4">
+        <label>Inhale beats (rest is exhale)</label>
+        <input type="range" id="inhale-frac" min="3" max="5" step="1" value="4">
       </div>
-      <div class="val-display"><span id="inhale-display">40</span>% in</div>
+      <div class="val-display"><span id="inhale-display">4 / 6</span> beats</div>
     </div>
   </div>
 </details>
@@ -224,7 +224,7 @@
     <div class="ctrl-row audio-row">
       <label class="audio-label">
         <input type="checkbox" id="audio-toggle">
-        <span>Audio cues — drone swells with breath, gong + metronome ticks each phase</span>
+        <span>Audio cues — a gong and metronome ticks mark each breath phase</span>
       </label>
       <div class="volume-wrap">
         <input type="range" id="volume" min="0" max="0.5" step="0.01" value="0.18">
@@ -244,12 +244,7 @@
     </div>
     <div class="ctrl-row mix-row">
       <div class="mix-control">
-        <label class="mix-label">Drone</label>
-        <input type="range" id="drone-level" min="0" max="1" step="0.01" value="0.5">
-        <span class="val-display"><span id="drone-level-display">50</span>%</span>
-      </div>
-      <div class="mix-control">
-        <label class="mix-label">Gong</label>
+        <label class="mix-label">Gong &amp; ticks</label>
         <input type="range" id="chime-level" min="0" max="1" step="0.01" value="1">
         <span class="val-display"><span id="chime-level-display">100</span>%</span>
       </div>
